@@ -301,6 +301,35 @@
             }
         }
 
+        @keyframes value-flash {
+            0% {
+                background-color: transparent;
+            }
+            50% {
+                background-color: rgba(52, 152, 219, 0.3);
+            }
+            100% {
+                background-color: transparent;
+            }
+        }
+
+        @keyframes header-pulse {
+            0%, 100% {
+                background-color: transparent;
+            }
+            50% {
+                background-color: rgba(52, 152, 219, 0.15);
+            }
+        }
+
+        .value-updated {
+            animation: value-flash 0.8s ease-out;
+        }
+
+        .header-updated {
+            animation: header-pulse 0.8s ease-out;
+        }
+
         .scooter-info {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -704,8 +733,6 @@
                 return;
             }
 
-            document.getElementById('scootersContainer').innerHTML = '<div class="loading">Loading scooters...</div>';
-
             try {
                 const data = await apiRequest('/api/scooters');
                 scootersData = data.scooters || [];
@@ -816,10 +843,12 @@
             connectionContainer.textContent = `${data.version || 'Unknown'} · ${uptime} · ↑${bytesSent} ↓${bytesRecv} · Tel:${tel} Cmd:${cmd}`;
         }
 
-        function createTableRowsHTML(fields) {
+        function createTableRowsHTML(fields, changedFields = null) {
             let rows = [];
             for (const [key, value] of Object.entries(fields)) {
-                rows.push(`<tr><td>${key}</td><td>${value}</td></tr>`);
+                const isChanged = changedFields && changedFields.hasOwnProperty(key);
+                const className = isChanged ? ' class="value-updated"' : '';
+                rows.push(`<tr${className}><td>${key}</td><td>${value}</td></tr>`);
             }
             return rows.join('');
         }
@@ -866,11 +895,17 @@
             badge.innerHTML = badgeItems.join('');
         }
 
-        function updateScooterState(scooterId, stateData) {
+        function updateScooterState(scooterId, stateData, deltaChanges = null) {
             const stateContainer = document.getElementById(`state-${scooterId}`);
             if (!stateContainer) return;
 
             const state = stateData.state || {};
+
+            // Remove loading text if present
+            const loadingText = stateContainer.querySelector('p');
+            if (loadingText && loadingText.textContent === 'Loading...') {
+                loadingText.remove();
+            }
 
             // Update badge
             updateStateBadge(scooterId, state);
@@ -880,6 +915,7 @@
                 if (typeof fields === 'object' && fields !== null && Object.keys(fields).length > 0) {
                     const detailsId = `details-${scooterId}-${component}`;
                     let detailsEl = document.getElementById(detailsId);
+                    const changedFields = deltaChanges && deltaChanges[component] ? deltaChanges[component] : null;
 
                     if (!detailsEl) {
                         // Create new details element
@@ -889,9 +925,20 @@
                         const wasOpen = detailsEl.open;
                         const tableBody = detailsEl.querySelector('table.state-table');
                         if (tableBody) {
-                            tableBody.innerHTML = createTableRowsHTML(fields);
+                            tableBody.innerHTML = createTableRowsHTML(fields, changedFields);
                         }
                         detailsEl.open = wasOpen;
+
+                        // If section is collapsed and has changes, animate the header
+                        if (!wasOpen && changedFields) {
+                            const summary = detailsEl.querySelector('summary');
+                            if (summary) {
+                                summary.classList.remove('header-updated');
+                                void summary.offsetWidth; // Trigger reflow
+                                summary.classList.add('header-updated');
+                                setTimeout(() => summary.classList.remove('header-updated'), 800);
+                            }
+                        }
                     }
                 }
             }
@@ -1037,6 +1084,8 @@
         }
 
         function updateScooterStateInPlace(scooterId, state, updateType) {
+            let deltaChanges = null;
+
             if (updateType === 'full') {
                 scooterStates[scooterId] = state;
             } else {
@@ -1044,6 +1093,8 @@
                 if (!scooterStates[scooterId]) {
                     scooterStates[scooterId] = {};
                 }
+
+                deltaChanges = state; // Keep delta for highlighting
 
                 for (const [component, fields] of Object.entries(state)) {
                     if (typeof fields === 'object' && fields !== null) {
@@ -1061,8 +1112,8 @@
                 }
             }
 
-            // Wrap state to match REST API format
-            updateScooterState(scooterId, { state: scooterStates[scooterId] });
+            // Wrap state to match REST API format and pass delta changes
+            updateScooterState(scooterId, { state: scooterStates[scooterId] }, deltaChanges);
         }
     </script>
 </body>
