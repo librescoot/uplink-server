@@ -230,16 +230,16 @@
             align-items: center;
         }
 
-        .header-right {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 4px;
-        }
-
         .connection-status {
             font-size: 12px;
             color: #7f8c8d;
+            margin-top: 8px;
+        }
+
+        @media (max-width: 768px) {
+            .connection-status {
+                font-size: 11px;
+            }
         }
 
         .state-section {
@@ -774,15 +774,13 @@
                                 <div class="scooter-id">${scooter.identifier}</div>
                                 <div class="state-badge" id="badge-${scooter.identifier}"></div>
                             </div>
-                            <div class="header-right">
-                                <div class="status-indicator">
-                                    <span class="status-dot online"></span>
-                                    <span>Connected</span>
-                                </div>
-                                <div class="connection-status" id="connection-${scooter.identifier}">
-                                    ${scooter.version || 'Unknown'} · ${formatDuration(scooter.uptime_seconds)} · ↑${formatBytes(scooter.bytes_sent || 0)} ↓${formatBytes(scooter.bytes_received || 0)} · Tel:${scooter.telemetry_received || 0} Cmd:${scooter.commands_sent || 0}
-                                </div>
+                            <div class="status-indicator">
+                                <span class="status-dot online"></span>
+                                <span>Connected</span>
                             </div>
+                        </div>
+                        <div class="connection-status" id="connection-${scooter.identifier}">
+                            ${scooter.version || 'Unknown'} · ${formatDuration(scooter.uptime_seconds)} · ↑${formatBytes(scooter.bytes_sent || 0)} ↓${formatBytes(scooter.bytes_received || 0)} · Tel:${scooter.telemetry_received || 0} Cmd:${scooter.commands_sent || 0}
                         </div>
                     </div>
 
