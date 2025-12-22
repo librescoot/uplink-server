@@ -15,6 +15,7 @@ type ServerConfig struct {
 	WSPort            int    `yaml:"ws_port"`
 	LPPort            int    `yaml:"lp_port"`
 	SSEPort           int    `yaml:"sse_port"`
+	EnableWebUI       bool   `yaml:"enable_web_ui"`
 	KeepaliveInterval string `yaml:"keepalive_interval"`
 	LPTimeout         string `yaml:"lp_timeout"`
 }

@@ -52,7 +52,10 @@ func main() {
 	apiHandler := handlers.NewAPIHandler(wsHandler, connMgr, responseStore, stateStore, config.Auth.APIKey)
 
 	// Setup routes
-	http.HandleFunc("/", serveWebUI)
+	if config.Server.EnableWebUI {
+		http.HandleFunc("/", serveWebUI)
+		log.Printf("Web UI enabled at /")
+	}
 	http.HandleFunc("/ws", wsHandler.HandleConnection)
 	http.HandleFunc("/api/commands", apiHandler.HandleCommands)
 	http.HandleFunc("/api/commands/", apiHandler.HandleCommandResponse)

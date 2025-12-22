@@ -2,6 +2,7 @@ server:
   ws_port: 8080
   lp_port: 8081
   sse_port: 8082
+  enable_web_ui: true
   keepalive_interval: "5m"
   lp_timeout: "24h"
 
