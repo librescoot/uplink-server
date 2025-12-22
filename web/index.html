@@ -1040,10 +1040,25 @@
             if (updateType === 'full') {
                 scooterStates[scooterId] = state;
             } else {
-                scooterStates[scooterId] = {
-                    ...scooterStates[scooterId],
-                    ...state
-                };
+                // Deep merge for delta updates
+                if (!scooterStates[scooterId]) {
+                    scooterStates[scooterId] = {};
+                }
+
+                for (const [component, fields] of Object.entries(state)) {
+                    if (typeof fields === 'object' && fields !== null) {
+                        // Merge component fields
+                        if (!scooterStates[scooterId][component]) {
+                            scooterStates[scooterId][component] = {};
+                        }
+                        scooterStates[scooterId][component] = {
+                            ...scooterStates[scooterId][component],
+                            ...fields
+                        };
+                    } else {
+                        scooterStates[scooterId][component] = fields;
+                    }
+                }
             }
 
             // Wrap state to match REST API format
