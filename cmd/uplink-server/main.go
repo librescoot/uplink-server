@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v2"
 
@@ -33,6 +34,7 @@ func main() {
 	// Initialize components
 	authenticator := auth.NewAuthenticator(config)
 	connMgr := storage.NewConnectionManager()
+	responseStore := storage.NewResponseStore(1 * time.Hour)
 
 	// Start stats logger
 	connMgr.StartStatsLogger(config.Logging.GetStatsInterval())
@@ -41,15 +43,24 @@ func main() {
 	wsHandler := handlers.NewWebSocketHandler(
 		authenticator,
 		connMgr,
+		responseStore,
 		config.Server.GetKeepaliveInterval(),
 	)
 
-	// Setup WebSocket server
-	http.HandleFunc("/ws", wsHandler.HandleConnection)
+	apiHandler := handlers.NewAPIHandler(wsHandler, connMgr, responseStore, config.Auth.APIKey)
 
-	// Start servers
+	// Setup routes
+	http.HandleFunc("/ws", wsHandler.HandleConnection)
+	http.HandleFunc("/api/commands", apiHandler.HandleCommands)
+	http.HandleFunc("/api/commands/", apiHandler.HandleCommandResponse)
+	http.HandleFunc("/api/scooters", apiHandler.HandleScooters)
+	http.HandleFunc("/api/scooters/", apiHandler.HandleScooterDetail)
+
+	// Start server
 	wsAddr := fmt.Sprintf(":%d", config.Server.WSPort)
-	log.Printf("WebSocket server listening on %s", wsAddr)
+	log.Printf("Server listening on %s", wsAddr)
+	log.Printf("  WebSocket endpoint: /ws")
+	log.Printf("  REST API endpoints: /api/commands, /api/scooters")
 	log.Printf("Keepalive interval: %s", config.Server.KeepaliveInterval)
 	log.Printf("Configured scooters: %d", len(config.Auth.Tokens))
 

@@ -26,15 +26,17 @@ var upgrader = websocket.Upgrader{
 type WebSocketHandler struct {
 	auth              *auth.Authenticator
 	connMgr           *storage.ConnectionManager
+	responseStore     *storage.ResponseStore
 	keepaliveInterval time.Duration
 	writeMu           sync.Mutex
 }
 
 // NewWebSocketHandler creates a new WebSocket handler
-func NewWebSocketHandler(authenticator *auth.Authenticator, connMgr *storage.ConnectionManager, keepaliveInterval time.Duration) *WebSocketHandler {
+func NewWebSocketHandler(authenticator *auth.Authenticator, connMgr *storage.ConnectionManager, responseStore *storage.ResponseStore, keepaliveInterval time.Duration) *WebSocketHandler {
 	return &WebSocketHandler{
 		auth:              authenticator,
 		connMgr:           connMgr,
+		responseStore:     responseStore,
 		keepaliveInterval: keepaliveInterval,
 	}
 }
@@ -183,9 +185,11 @@ func (h *WebSocketHandler) messageReceiver(conn *models.Connection) {
 				log.Printf("[WS] Failed to parse command response from %s: %v", conn.Identifier, err)
 				continue
 			}
+
+			h.responseStore.Store(cmdResp.RequestID, conn.Identifier, "", &cmdResp)
+
 			log.Printf("[WS] Received command response from %s: request_id=%s status=%s",
 				conn.Identifier, cmdResp.RequestID, cmdResp.Status)
-			// TODO: Handle command response
 
 		default:
 			log.Printf("[WS] Unknown message type from %s: %s", conn.Identifier, baseMsg.Type)
@@ -270,14 +274,14 @@ func (h *WebSocketHandler) sendAuthResponse(conn *websocket.Conn, status, errMsg
 }
 
 // SendCommand sends a command to a scooter
-func (h *WebSocketHandler) SendCommand(identifier, command string, params map[string]any) error {
+func (h *WebSocketHandler) SendCommand(identifier, command string, params map[string]any) (string, error) {
 	conn, exists := h.connMgr.GetConnection(identifier)
 	if !exists {
-		return ErrConnectionNotFound
+		return "", ErrConnectionNotFound
 	}
 
 	if !conn.Authenticated {
-		return ErrNotAuthenticated
+		return "", ErrNotAuthenticated
 	}
 
 	cmdMsg := protocol.CommandMessage{
@@ -290,16 +294,16 @@ func (h *WebSocketHandler) SendCommand(identifier, command string, params map[st
 
 	data, err := json.Marshal(cmdMsg)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	select {
 	case conn.SendChannel() <- data:
 		conn.IncrementCommandsSent()
 		log.Printf("[WS] Sent command to %s: %s (request_id=%s)", identifier, command, cmdMsg.RequestID)
-		return nil
+		return cmdMsg.RequestID, nil
 	default:
-		return ErrSendChannelFull
+		return "", ErrSendChannelFull
 	}
 }
 

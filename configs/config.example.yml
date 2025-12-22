@@ -6,6 +6,7 @@ server:
   lp_timeout: "24h"
 
 auth:
+  api_key: "dev-api-key-change-in-production"
   tokens:
     "mdb-12345678": "secret-token-1"
     "mdb-87654321": "secret-token-2"

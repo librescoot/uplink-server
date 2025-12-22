@@ -21,6 +21,7 @@ type ServerConfig struct {
 
 // AuthConfig contains authentication settings
 type AuthConfig struct {
+	APIKey string            `yaml:"api_key"`
 	Tokens map[string]string `yaml:"tokens"`
 }
 

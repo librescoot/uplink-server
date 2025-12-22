@@ -1,0 +1,322 @@
+package handlers
+
+import (
+	"encoding/json"
+	"io"
+	"log"
+	"net/http"
+	"strings"
+
+	"github.com/librescoot/uplink-server/internal/storage"
+)
+
+// APIHandler handles REST API requests
+type APIHandler struct {
+	wsHandler     *WebSocketHandler
+	connMgr       *storage.ConnectionManager
+	responseStore *storage.ResponseStore
+	apiKey        string
+}
+
+// NewAPIHandler creates a new API handler
+func NewAPIHandler(ws *WebSocketHandler, mgr *storage.ConnectionManager, store *storage.ResponseStore, apiKey string) *APIHandler {
+	return &APIHandler{
+		wsHandler:     ws,
+		connMgr:       mgr,
+		responseStore: store,
+		apiKey:        apiKey,
+	}
+}
+
+// HandleCommands handles POST /api/commands and GET /api/commands
+func (h *APIHandler) HandleCommands(w http.ResponseWriter, r *http.Request) {
+	h.cors(h.authenticate(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			h.handleSendCommand(w, r)
+		} else if r.Method == http.MethodGet {
+			h.writeError(w, http.StatusMethodNotAllowed, "Use POST to send commands or GET /api/commands/{request_id} to retrieve")
+		} else {
+			h.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		}
+	}))(w, r)
+}
+
+// HandleCommandResponse handles GET /api/commands/{request_id}
+func (h *APIHandler) HandleCommandResponse(w http.ResponseWriter, r *http.Request) {
+	h.cors(h.authenticate(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			h.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+			return
+		}
+
+		requestID := extractPathParam(r.URL.Path, "/api/commands/")
+		if requestID == "" {
+			h.writeError(w, http.StatusBadRequest, "Request ID required")
+			return
+		}
+
+		h.handleGetCommandResponse(w, r, requestID)
+	}))(w, r)
+}
+
+// HandleScooters handles GET /api/scooters and GET /api/scooters/{id}
+func (h *APIHandler) HandleScooters(w http.ResponseWriter, r *http.Request) {
+	h.cors(h.authenticate(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			h.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+			return
+		}
+
+		if r.URL.Path == "/api/scooters" {
+			h.handleListScooters(w, r)
+		} else {
+			h.writeError(w, http.StatusNotFound, "Use /api/scooters to list or /api/scooters/{id} for details")
+		}
+	}))(w, r)
+}
+
+// HandleScooterDetail handles GET /api/scooters/{id} and GET /api/scooters/{id}/commands
+func (h *APIHandler) HandleScooterDetail(w http.ResponseWriter, r *http.Request) {
+	h.cors(h.authenticate(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			h.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+			return
+		}
+
+		// Check if this is a command history request
+		if isCommandHistoryRequest(r.URL.Path) {
+			scooterID := extractScooterIDFromCommandPath(r.URL.Path)
+			if scooterID == "" {
+				h.writeError(w, http.StatusBadRequest, "Scooter ID required")
+				return
+			}
+			h.handleGetScooterCommands(w, r, scooterID)
+		} else {
+			scooterID := extractPathParam(r.URL.Path, "/api/scooters/")
+			if scooterID == "" {
+				h.writeError(w, http.StatusBadRequest, "Scooter ID required")
+				return
+			}
+			h.handleGetScooter(w, r, scooterID)
+		}
+	}))(w, r)
+}
+
+// handleSendCommand sends a command to a scooter
+func (h *APIHandler) handleSendCommand(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ScooterID string         `json:"scooter_id"`
+		Command   string         `json:"command"`
+		Params    map[string]any `json:"params"`
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		h.writeError(w, http.StatusBadRequest, "Failed to read request body")
+		return
+	}
+
+	if err := json.Unmarshal(body, &req); err != nil {
+		h.writeError(w, http.StatusBadRequest, "Invalid JSON format")
+		return
+	}
+
+	if req.ScooterID == "" || req.Command == "" {
+		h.writeError(w, http.StatusBadRequest, "scooter_id and command are required")
+		return
+	}
+
+	if req.Params == nil {
+		req.Params = make(map[string]any)
+	}
+
+	requestID, err := h.wsHandler.SendCommand(req.ScooterID, req.Command, req.Params)
+	if err != nil {
+		if err == ErrConnectionNotFound {
+			h.writeError(w, http.StatusNotFound, "Scooter not connected")
+		} else if err == ErrSendChannelFull {
+			h.writeError(w, http.StatusServiceUnavailable, "Send channel full, try again later")
+		} else {
+			h.writeError(w, http.StatusInternalServerError, "Failed to send command")
+		}
+		return
+	}
+
+	h.writeJSON(w, http.StatusCreated, map[string]any{
+		"request_id": requestID,
+		"status":     "sent",
+		"message":    "Command sent successfully",
+	})
+}
+
+// handleGetCommandResponse retrieves a command response by request ID
+func (h *APIHandler) handleGetCommandResponse(w http.ResponseWriter, r *http.Request, requestID string) {
+	record, exists := h.responseStore.Get(requestID)
+	if !exists {
+		h.writeJSON(w, http.StatusOK, map[string]any{
+			"request_id": requestID,
+			"status":     "pending",
+			"message":    "Response not yet received",
+		})
+		return
+	}
+
+	response := map[string]any{
+		"request_id":  record.RequestID,
+		"scooter_id":  record.ScooterID,
+		"status":      record.Response.Status,
+		"received_at": record.ReceivedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	if record.Command != "" {
+		response["command"] = record.Command
+	}
+
+	if record.Response.Result != nil {
+		response["result"] = record.Response.Result
+	}
+
+	if record.Response.Error != "" {
+		response["error"] = record.Response.Error
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
+}
+
+// handleListScooters lists all connected scooters
+func (h *APIHandler) handleListScooters(w http.ResponseWriter, r *http.Request) {
+	connections := h.connMgr.GetAllConnections()
+
+	scooters := make([]map[string]any, 0, len(connections))
+	for _, conn := range connections {
+		stats := conn.GetStats()
+		scooters = append(scooters, map[string]any{
+			"identifier":     stats["identifier"],
+			"version":        stats["version"],
+			"connected_at":   stats["connected_at"],
+			"last_seen":      stats["last_seen"],
+			"uptime_seconds": stats["uptime_seconds"],
+			"authenticated":  stats["authenticated"],
+		})
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"scooters": scooters,
+		"total":    len(scooters),
+	})
+}
+
+// handleGetScooter retrieves details for a specific scooter
+func (h *APIHandler) handleGetScooter(w http.ResponseWriter, r *http.Request, scooterID string) {
+	conn, exists := h.connMgr.GetConnection(scooterID)
+	if !exists {
+		h.writeError(w, http.StatusNotFound, "Scooter not connected")
+		return
+	}
+
+	stats := conn.GetStats()
+	h.writeJSON(w, http.StatusOK, stats)
+}
+
+// handleGetScooterCommands retrieves command history for a scooter
+func (h *APIHandler) handleGetScooterCommands(w http.ResponseWriter, r *http.Request, scooterID string) {
+	_, exists := h.connMgr.GetConnection(scooterID)
+	if !exists {
+		h.writeError(w, http.StatusNotFound, "Scooter not connected")
+		return
+	}
+
+	records := h.responseStore.GetByScooter(scooterID)
+
+	commands := make([]map[string]any, 0, len(records))
+	for _, record := range records {
+		cmd := map[string]any{
+			"request_id":  record.RequestID,
+			"status":      record.Response.Status,
+			"received_at": record.ReceivedAt.Format("2006-01-02T15:04:05Z07:00"),
+		}
+
+		if record.Command != "" {
+			cmd["command"] = record.Command
+		}
+
+		commands = append(commands, cmd)
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"scooter_id": scooterID,
+		"commands":   commands,
+		"total":      len(commands),
+	})
+}
+
+// authenticate middleware checks for valid API key
+func (h *APIHandler) authenticate(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			next(w, r)
+			return
+		}
+
+		apiKey := r.Header.Get("X-API-Key")
+		if apiKey != h.apiKey {
+			h.writeError(w, http.StatusUnauthorized, "Invalid or missing API key")
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+// cors middleware adds CORS headers
+func (h *APIHandler) cors(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+// writeJSON writes a JSON response
+func (h *APIHandler) writeJSON(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("[API] Failed to encode JSON response: %v", err)
+	}
+}
+
+// writeError writes an error JSON response
+func (h *APIHandler) writeError(w http.ResponseWriter, status int, message string) {
+	h.writeJSON(w, status, map[string]any{
+		"error": message,
+	})
+}
+
+// extractPathParam extracts a path parameter from a URL
+func extractPathParam(path, prefix string) string {
+	if !strings.HasPrefix(path, prefix) {
+		return ""
+	}
+	return strings.TrimPrefix(path, prefix)
+}
+
+// isCommandHistoryRequest checks if path is for command history
+func isCommandHistoryRequest(path string) bool {
+	return strings.HasSuffix(path, "/commands")
+}
+
+// extractScooterIDFromCommandPath extracts scooter ID from /api/scooters/{id}/commands
+func extractScooterIDFromCommandPath(path string) string {
+	path = strings.TrimPrefix(path, "/api/scooters/")
+	path = strings.TrimSuffix(path, "/commands")
+	return path
+}
