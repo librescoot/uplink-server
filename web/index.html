@@ -781,11 +781,10 @@
                 }
             });
 
-            // Add new scooter cards
+            // Add new scooter cards (state will come via WebSocket)
             scootersData.forEach(scooter => {
                 if (!existingCards.has(scooter.identifier)) {
                     container.insertAdjacentHTML('beforeend', createScooterCardHTML(scooter));
-                    loadScooterDetails(scooter.identifier);
                 }
             });
         }
@@ -1047,7 +1046,8 @@
                 };
             }
 
-            updateScooterState(scooterId, scooterStates[scooterId]);
+            // Wrap state to match REST API format
+            updateScooterState(scooterId, { state: scooterStates[scooterId] });
         }
     </script>
 </body>
