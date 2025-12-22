@@ -225,10 +225,16 @@
             align-items: center;
         }
 
+        .header-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+        }
+
         .connection-status {
             font-size: 12px;
             color: #7f8c8d;
-            padding-top: 6px;
         }
 
         .state-section {
@@ -249,7 +255,7 @@
         }
 
         .state-badge {
-            font-size: 11px;
+            font-size: 12px;
             color: #7f8c8d;
             margin-top: 4px;
         }
@@ -592,12 +598,14 @@
         let apiKey = localStorage.getItem(API_KEY_STORAGE) || '';
         let scootersData = [];
         let scooterStates = {};
+        let ws = null;
+        let wsReconnectDelay = 1000;
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             if (apiKey) {
                 document.getElementById('apiKeyInput').value = apiKey;
-                loadScooters();
+                connectWebSocket();
             } else {
                 openApiKeyDialog();
             }
@@ -644,7 +652,7 @@
             setApiKeyError(false);
             setTimeout(() => {
                 closeApiKeyDialog();
-                loadScooters();
+                connectWebSocket();
             }, 500);
         }
 
@@ -654,6 +662,10 @@
             document.getElementById('apiKeyInput').value = '';
             showStatus('apiKeyStatus', 'API key cleared', 'info');
             setApiKeyError(false);
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
             document.getElementById('scootersContainer').innerHTML = '<div class="empty-state"><h3>No API key configured</h3><p>Enter and save your API key to view scooters</p></div>';
         }
 
@@ -726,13 +738,15 @@
                                 <div class="scooter-id">${scooter.identifier}</div>
                                 <div class="state-badge" id="badge-${scooter.identifier}"></div>
                             </div>
-                            <div class="status-indicator">
-                                <span class="status-dot online"></span>
-                                <span>Connected</span>
+                            <div class="header-right">
+                                <div class="status-indicator">
+                                    <span class="status-dot online"></span>
+                                    <span>Connected</span>
+                                </div>
+                                <div class="connection-status" id="connection-${scooter.identifier}">
+                                    ${scooter.version || 'Unknown'} · ${formatDuration(scooter.uptime_seconds)} uptime
+                                </div>
                             </div>
-                        </div>
-                        <div class="connection-status" id="connection-${scooter.identifier}">
-                            ${scooter.version || 'Unknown'} · ${formatDuration(scooter.uptime_seconds)} uptime
                         </div>
                     </div>
 
@@ -907,12 +921,87 @@
             return `${(bytes / 1048576).toFixed(1)} MB`;
         }
 
-        // Auto-refresh every 30 seconds
-        setInterval(() => {
-            if (apiKey) {
-                loadScooters();
+        // WebSocket connection for real-time updates
+        function connectWebSocket() {
+            if (!apiKey) return;
+
+            // Close existing connection if any
+            if (ws) {
+                ws.close();
+                ws = null;
             }
-        }, 30000);
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/web?api_key=${encodeURIComponent(apiKey)}`;
+
+            console.log('[WebSocket] Connecting to', wsUrl);
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                console.log('[WebSocket] Connected');
+                wsReconnectDelay = 1000;
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const msg = JSON.parse(event.data);
+                    handleWebSocketMessage(msg);
+                } catch (error) {
+                    console.error('[WebSocket] Failed to parse message:', error);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('[WebSocket] Error:', error);
+            };
+
+            ws.onclose = () => {
+                console.log('[WebSocket] Disconnected, reconnecting in', wsReconnectDelay, 'ms');
+                ws = null;
+                setTimeout(connectWebSocket, wsReconnectDelay);
+                wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
+            };
+        }
+
+        function handleWebSocketMessage(msg) {
+            console.log('[WebSocket] Received:', msg.type);
+
+            switch (msg.type) {
+                case 'scooter_list':
+                    scootersData = msg.scooters || [];
+                    renderScooters();
+                    break;
+
+                case 'state_update':
+                    updateScooterStateInPlace(msg.scooter_id, msg.state, msg.update_type);
+                    break;
+
+                case 'scooter_online':
+                    if (!scootersData.find(s => s.identifier === msg.scooter.identifier)) {
+                        scootersData.push(msg.scooter);
+                        renderScooters();
+                    }
+                    break;
+
+                case 'scooter_offline':
+                    scootersData = scootersData.filter(s => s.identifier !== msg.scooter_id);
+                    renderScooters();
+                    break;
+            }
+        }
+
+        function updateScooterStateInPlace(scooterId, state, updateType) {
+            if (updateType === 'full') {
+                scooterStates[scooterId] = state;
+            } else {
+                scooterStates[scooterId] = {
+                    ...scooterStates[scooterId],
+                    ...state
+                };
+            }
+
+            updateScooterState(scooterId, scooterStates[scooterId]);
+        }
     </script>
 </body>
 </html>

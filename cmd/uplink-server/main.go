@@ -54,6 +54,12 @@ func main() {
 	// Setup routes
 	if config.Server.EnableWebUI {
 		http.HandleFunc("/", serveWebUI)
+		http.HandleFunc("/images/", serveImages)
+
+		// WebSocket for web UI real-time updates
+		webUIHandler := handlers.NewWebUIHandler(stateStore, connMgr, config.Auth.APIKey)
+		http.HandleFunc("/ws/web", webUIHandler.HandleWebConnection)
+
 		log.Printf("Web UI enabled at /")
 	}
 	http.HandleFunc("/ws", wsHandler.HandleConnection)
@@ -66,6 +72,9 @@ func main() {
 	wsAddr := fmt.Sprintf(":%d", config.Server.WSPort)
 	log.Printf("Server listening on %s", wsAddr)
 	log.Printf("  WebSocket endpoint: /ws")
+	if config.Server.EnableWebUI {
+		log.Printf("  Web UI WebSocket: /ws/web")
+	}
 	log.Printf("  REST API endpoints: /api/commands, /api/scooters")
 	log.Printf("Keepalive interval: %s", config.Server.KeepaliveInterval)
 	log.Printf("Configured scooters: %d", len(config.Auth.Tokens))
@@ -108,4 +117,8 @@ func serveWebUI(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeFile(w, r, "web/index.html")
+}
+
+func serveImages(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, "web"+r.URL.Path)
 }

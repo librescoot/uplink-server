@@ -13,23 +13,55 @@ type ScooterState struct {
 	LastChangeAt time.Time
 }
 
+// StateUpdate represents a state change notification
+type StateUpdate struct {
+	ScooterID string
+	State     map[string]any
+	Type      string // "full" or "delta"
+	Timestamp time.Time
+}
+
 // StateStore manages scooter state data
 type StateStore struct {
-	mu     sync.RWMutex
-	states map[string]*ScooterState
+	mu          sync.RWMutex
+	states      map[string]*ScooterState
+	subscribers []chan<- StateUpdate
 }
 
 // NewStateStore creates a new state store
 func NewStateStore() *StateStore {
 	return &StateStore{
-		states: make(map[string]*ScooterState),
+		states:      make(map[string]*ScooterState),
+		subscribers: make([]chan<- StateUpdate, 0),
+	}
+}
+
+// Subscribe creates a new subscription channel for state updates
+func (ss *StateStore) Subscribe() <-chan StateUpdate {
+	ch := make(chan StateUpdate, 100)
+	ss.mu.Lock()
+	ss.subscribers = append(ss.subscribers, ch)
+	ss.mu.Unlock()
+	return ch
+}
+
+// broadcast sends a state update to all subscribers
+func (ss *StateStore) broadcast(update StateUpdate) {
+	ss.mu.RLock()
+	defer ss.mu.RUnlock()
+
+	for _, ch := range ss.subscribers {
+		select {
+		case ch <- update:
+		default:
+			// Skip slow subscribers to avoid blocking
+		}
 	}
 }
 
 // UpdateState updates or creates a scooter's full state
 func (ss *StateStore) UpdateState(scooterID string, stateData map[string]any) {
 	ss.mu.Lock()
-	defer ss.mu.Unlock()
 
 	state, exists := ss.states[scooterID]
 	if !exists {
@@ -44,12 +76,21 @@ func (ss *StateStore) UpdateState(scooterID string, stateData map[string]any) {
 	state.State = stateData
 	state.LastUpdated = time.Now()
 	state.LastChangeAt = time.Now()
+
+	ss.mu.Unlock()
+
+	// Broadcast to subscribers (outside lock to avoid deadlock)
+	ss.broadcast(StateUpdate{
+		ScooterID: scooterID,
+		State:     stateData,
+		Type:      "full",
+		Timestamp: time.Now(),
+	})
 }
 
 // UpdateChanges applies incremental changes to a scooter's state
 func (ss *StateStore) UpdateChanges(scooterID string, changes map[string]any) {
 	ss.mu.Lock()
-	defer ss.mu.Unlock()
 
 	state, exists := ss.states[scooterID]
 	if !exists {
@@ -78,6 +119,16 @@ func (ss *StateStore) UpdateChanges(scooterID string, changes map[string]any) {
 
 	state.LastUpdated = time.Now()
 	state.LastChangeAt = time.Now()
+
+	ss.mu.Unlock()
+
+	// Broadcast to subscribers (outside lock to avoid deadlock)
+	ss.broadcast(StateUpdate{
+		ScooterID: scooterID,
+		State:     changes,
+		Type:      "delta",
+		Timestamp: time.Now(),
+	})
 }
 
 // GetState retrieves the latest state for a scooter
