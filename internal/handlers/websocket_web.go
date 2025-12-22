@@ -46,10 +46,14 @@ type WebMessage struct {
 
 // ScooterInfo represents scooter connection information
 type ScooterInfo struct {
-	Identifier string `json:"identifier"`
-	Connected  bool   `json:"connected"`
-	Version    string `json:"version,omitempty"`
-	Uptime     int64  `json:"uptime_seconds,omitempty"`
+	Identifier       string `json:"identifier"`
+	Connected        bool   `json:"connected"`
+	Version          string `json:"version,omitempty"`
+	Uptime           int64  `json:"uptime_seconds,omitempty"`
+	BytesSent        int64  `json:"bytes_sent,omitempty"`
+	BytesReceived    int64  `json:"bytes_received,omitempty"`
+	TelemetryReceived int64 `json:"telemetry_received,omitempty"`
+	CommandsSent     int64  `json:"commands_sent,omitempty"`
 }
 
 // HandleWebConnection handles WebSocket connections from web UI
@@ -110,10 +114,14 @@ func (h *WebUIHandler) sendScooterList(conn *websocket.Conn) {
 
 	for _, c := range connections {
 		scooters = append(scooters, ScooterInfo{
-			Identifier: c.Identifier,
-			Connected:  true,
-			Version:    c.Version,
-			Uptime:     int64(time.Since(c.ConnectedAt).Seconds()),
+			Identifier:       c.Identifier,
+			Connected:        true,
+			Version:          c.Version,
+			Uptime:           int64(time.Since(c.ConnectedAt).Seconds()),
+			BytesSent:        c.BytesSent,
+			BytesReceived:    c.BytesReceived,
+			TelemetryReceived: c.TelemetryReceived,
+			CommandsSent:     c.CommandsSent,
 		})
 	}
 
