@@ -722,15 +722,8 @@
             }
         }
 
-        function renderScooters() {
-            const container = document.getElementById('scootersContainer');
-
-            if (scootersData.length === 0) {
-                container.innerHTML = '<div class="empty-state"><h3>No scooters connected</h3><p>Connect a scooter via WebSocket to see it here</p></div>';
-                return;
-            }
-
-            container.innerHTML = scootersData.map(scooter => `
+        function createScooterCardHTML(scooter) {
+            return `
                 <div class="scooter-card" id="scooter-${scooter.identifier}">
                     <div class="scooter-header">
                         <div class="scooter-title">
@@ -764,10 +757,37 @@
                         <p style="color: #7f8c8d; font-size: 13px;">Loading...</p>
                     </div>
                 </div>
-            `).join('');
+            `;
+        }
 
-            // Load detailed info for each scooter
-            scootersData.forEach(scooter => loadScooterDetails(scooter.identifier));
+        function renderScooters() {
+            const container = document.getElementById('scootersContainer');
+
+            if (scootersData.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No scooters connected</h3><p>Connect a scooter via WebSocket to see it here</p></div>';
+                return;
+            }
+
+            // Get existing card IDs
+            const existingCards = new Set(
+                Array.from(container.querySelectorAll('.scooter-card'))
+                    .map(card => card.id.replace('scooter-', ''))
+            );
+
+            // Remove cards for disconnected scooters
+            existingCards.forEach(id => {
+                if (!scootersData.find(s => s.identifier === id)) {
+                    document.getElementById(`scooter-${id}`).remove();
+                }
+            });
+
+            // Add new scooter cards
+            scootersData.forEach(scooter => {
+                if (!existingCards.has(scooter.identifier)) {
+                    container.insertAdjacentHTML('beforeend', createScooterCardHTML(scooter));
+                    loadScooterDetails(scooter.identifier);
+                }
+            });
         }
 
         async function loadScooterDetails(scooterId) {
@@ -797,67 +817,94 @@
             connectionContainer.textContent = `${data.version || 'Unknown'} · ${uptime} · ↑${bytesSent} ↓${bytesRecv} · Tel:${tel} Cmd:${cmd}`;
         }
 
+        function createTableRowsHTML(fields) {
+            let rows = [];
+            for (const [key, value] of Object.entries(fields)) {
+                rows.push(`<tr><td>${key}</td><td>${value}</td></tr>`);
+            }
+            return rows.join('');
+        }
+
+        function createComponentDetailsHTML(component, fields, detailsId) {
+            return `
+                <details id="${detailsId}">
+                    <summary>${component}</summary>
+                    <table class="state-table">
+                        ${createTableRowsHTML(fields)}
+                    </table>
+                </details>
+            `;
+        }
+
+        function updateStateBadge(scooterId, state) {
+            const badge = document.getElementById(`badge-${scooterId}`);
+            if (!badge) return;
+
+            let badgeItems = [];
+
+            if (state.vehicle && state.vehicle.state) {
+                badgeItems.push(`<span>${state.vehicle.state}</span>`);
+            }
+
+            // Battery display logic
+            const bat0 = state['battery:0'];
+            const bat1 = state['battery:1'];
+
+            if (!bat0 || bat0.present !== 'true') {
+                badgeItems.push(`<span>🔋-</span>`);
+            } else {
+                let batteryText = '🔋' + bat0.charge + '%';
+                if (bat1 && bat1.present === 'true' && bat1.charge) {
+                    batteryText += ' ' + bat1.charge + '%';
+                }
+                badgeItems.push(`<span>${batteryText}</span>`);
+            }
+
+            if (state.vehicle && state.vehicle['seatbox:lock']) {
+                badgeItems.push(`<span>🔒${state.vehicle['seatbox:lock']}</span>`);
+            }
+
+            badge.innerHTML = badgeItems.join('');
+        }
+
         function updateScooterState(scooterId, stateData) {
             const stateContainer = document.getElementById(`state-${scooterId}`);
             if (!stateContainer) return;
 
             const state = stateData.state || {};
 
-            // Update badge with key info
-            const badge = document.getElementById(`badge-${scooterId}`);
-            if (badge) {
-                let badgeItems = [];
+            // Update badge
+            updateStateBadge(scooterId, state);
 
-                if (state.vehicle && state.vehicle.state) {
-                    badgeItems.push(`<span>${state.vehicle.state}</span>`);
-                }
-
-                // Battery display logic
-                const bat0 = state['battery:0'];
-                const bat1 = state['battery:1'];
-
-                if (!bat0 || bat0.present !== 'true') {
-                    badgeItems.push(`<span>🔋-</span>`);
-                } else {
-                    let batteryText = '🔋' + bat0.charge + '%';
-                    if (bat1 && bat1.present === 'true' && bat1.charge) {
-                        batteryText += ' ' + bat1.charge + '%';
-                    }
-                    badgeItems.push(`<span>${batteryText}</span>`);
-                }
-
-                if (state.vehicle && state.vehicle['seatbox:lock']) {
-                    badgeItems.push(`<span>🔒${state.vehicle['seatbox:lock']}</span>`);
-                }
-
-                badge.innerHTML = badgeItems.join('');
-            }
-
-            // Build state display grouped by component
-            let componentSections = [];
+            // Update state display in place, preserving open/closed details
             for (const [component, fields] of Object.entries(state)) {
-                if (typeof fields === 'object' && fields !== null) {
-                    let tableRows = [];
-                    for (const [key, value] of Object.entries(fields)) {
-                        tableRows.push(`<tr><td>${key}</td><td>${value}</td></tr>`);
-                    }
+                if (typeof fields === 'object' && fields !== null && Object.keys(fields).length > 0) {
+                    const detailsId = `details-${scooterId}-${component}`;
+                    let detailsEl = document.getElementById(detailsId);
 
-                    if (tableRows.length > 0) {
-                        componentSections.push(`
-                            <details>
-                                <summary>${component}</summary>
-                                <table class="state-table">
-                                    ${tableRows.join('')}
-                                </table>
-                            </details>
-                        `);
+                    if (!detailsEl) {
+                        // Create new details element
+                        stateContainer.insertAdjacentHTML('beforeend', createComponentDetailsHTML(component, fields, detailsId));
+                    } else {
+                        // Update existing details element while preserving open state
+                        const wasOpen = detailsEl.open;
+                        const tableBody = detailsEl.querySelector('table.state-table');
+                        if (tableBody) {
+                            tableBody.innerHTML = createTableRowsHTML(fields);
+                        }
+                        detailsEl.open = wasOpen;
                     }
                 }
             }
 
-            if (componentSections.length > 0) {
-                stateContainer.innerHTML = componentSections.join('');
-            }
+            // Remove details for components no longer in state
+            const currentComponents = Object.keys(state);
+            stateContainer.querySelectorAll('details').forEach(details => {
+                const component = details.id.replace(`details-${scooterId}-`, '');
+                if (!currentComponents.includes(component)) {
+                    details.remove();
+                }
+            });
         }
 
         async function sendCommand(scooterId, command) {
