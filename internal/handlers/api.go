@@ -15,15 +15,17 @@ type APIHandler struct {
 	wsHandler     *WebSocketHandler
 	connMgr       *storage.ConnectionManager
 	responseStore *storage.ResponseStore
+	stateStore    *storage.StateStore
 	apiKey        string
 }
 
 // NewAPIHandler creates a new API handler
-func NewAPIHandler(ws *WebSocketHandler, mgr *storage.ConnectionManager, store *storage.ResponseStore, apiKey string) *APIHandler {
+func NewAPIHandler(ws *WebSocketHandler, mgr *storage.ConnectionManager, store *storage.ResponseStore, stateStore *storage.StateStore, apiKey string) *APIHandler {
 	return &APIHandler{
 		wsHandler:     ws,
 		connMgr:       mgr,
 		responseStore: store,
+		stateStore:    stateStore,
 		apiKey:        apiKey,
 	}
 }
@@ -83,7 +85,7 @@ func (h *APIHandler) HandleScooterDetail(w http.ResponseWriter, r *http.Request)
 			return
 		}
 
-		// Check if this is a command history request
+		// Check which endpoint is being requested
 		if isCommandHistoryRequest(r.URL.Path) {
 			scooterID := extractScooterIDFromCommandPath(r.URL.Path)
 			if scooterID == "" {
@@ -91,6 +93,13 @@ func (h *APIHandler) HandleScooterDetail(w http.ResponseWriter, r *http.Request)
 				return
 			}
 			h.handleGetScooterCommands(w, r, scooterID)
+		} else if isStateRequest(r.URL.Path) {
+			scooterID := extractScooterIDFromStatePath(r.URL.Path)
+			if scooterID == "" {
+				h.writeError(w, http.StatusBadRequest, "Scooter ID required")
+				return
+			}
+			h.handleGetScooterState(w, r, scooterID)
 		} else {
 			scooterID := extractPathParam(r.URL.Path, "/api/scooters/")
 			if scooterID == "" {
@@ -309,14 +318,51 @@ func extractPathParam(path, prefix string) string {
 	return strings.TrimPrefix(path, prefix)
 }
 
+// handleGetScooterState retrieves the latest state for a scooter
+func (h *APIHandler) handleGetScooterState(w http.ResponseWriter, r *http.Request, scooterID string) {
+	_, exists := h.connMgr.GetConnection(scooterID)
+	if !exists {
+		h.writeError(w, http.StatusNotFound, "Scooter not connected")
+		return
+	}
+
+	state, exists := h.stateStore.GetState(scooterID)
+	if !exists {
+		h.writeJSON(w, http.StatusOK, map[string]any{
+			"scooter_id": scooterID,
+			"state":      map[string]any{},
+			"message":    "No state data available yet",
+		})
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"scooter_id":   scooterID,
+		"state":        state.State,
+		"last_updated": state.LastUpdated.Format("2006-01-02T15:04:05Z07:00"),
+	})
+}
+
 // isCommandHistoryRequest checks if path is for command history
 func isCommandHistoryRequest(path string) bool {
 	return strings.HasSuffix(path, "/commands")
+}
+
+// isStateRequest checks if path is for state data
+func isStateRequest(path string) bool {
+	return strings.HasSuffix(path, "/state")
 }
 
 // extractScooterIDFromCommandPath extracts scooter ID from /api/scooters/{id}/commands
 func extractScooterIDFromCommandPath(path string) string {
 	path = strings.TrimPrefix(path, "/api/scooters/")
 	path = strings.TrimSuffix(path, "/commands")
+	return path
+}
+
+// extractScooterIDFromStatePath extracts scooter ID from /api/scooters/{id}/state
+func extractScooterIDFromStatePath(path string) string {
+	path = strings.TrimPrefix(path, "/api/scooters/")
+	path = strings.TrimSuffix(path, "/state")
 	return path
 }

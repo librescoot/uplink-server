@@ -27,16 +27,18 @@ type WebSocketHandler struct {
 	auth              *auth.Authenticator
 	connMgr           *storage.ConnectionManager
 	responseStore     *storage.ResponseStore
+	stateStore        *storage.StateStore
 	keepaliveInterval time.Duration
 	writeMu           sync.Mutex
 }
 
 // NewWebSocketHandler creates a new WebSocket handler
-func NewWebSocketHandler(authenticator *auth.Authenticator, connMgr *storage.ConnectionManager, responseStore *storage.ResponseStore, keepaliveInterval time.Duration) *WebSocketHandler {
+func NewWebSocketHandler(authenticator *auth.Authenticator, connMgr *storage.ConnectionManager, responseStore *storage.ResponseStore, stateStore *storage.StateStore, keepaliveInterval time.Duration) *WebSocketHandler {
 	return &WebSocketHandler{
 		auth:              authenticator,
 		connMgr:           connMgr,
 		responseStore:     responseStore,
+		stateStore:        stateStore,
 		keepaliveInterval: keepaliveInterval,
 	}
 }
@@ -151,9 +153,10 @@ func (h *WebSocketHandler) messageReceiver(conn *models.Connection) {
 			}
 			conn.IncrementTelemetryReceived()
 
+			h.stateStore.UpdateState(conn.Identifier, stateMsg.Data)
+
 			stateJSON, _ := json.MarshalIndent(stateMsg.Data, "", "  ")
 			log.Printf("[WS] Received state snapshot from %s:\n%s", conn.Identifier, string(stateJSON))
-			// TODO: Store state
 
 		case protocol.MsgTypeChange:
 			var changeMsg protocol.ChangeMessage
@@ -163,9 +166,10 @@ func (h *WebSocketHandler) messageReceiver(conn *models.Connection) {
 			}
 			conn.IncrementTelemetryReceived()
 
+			h.stateStore.UpdateChanges(conn.Identifier, changeMsg.Changes)
+
 			changeJSON, _ := json.MarshalIndent(changeMsg.Changes, "", "  ")
 			log.Printf("[WS] Received state changes from %s:\n%s", conn.Identifier, string(changeJSON))
-			// TODO: Update state
 
 		case protocol.MsgTypeEvent:
 			var eventMsg protocol.EventMessage

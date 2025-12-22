@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uplink Server</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px 0;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .api-key-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .api-key-section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        input[type="text"], input[type="password"] {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .scooters-section {
+            margin-top: 20px;
+        }
+
+        .scooter-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .scooter-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .scooter-id {
+            font-size: 18px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .scooter-status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .scooter-status.online {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .scooter-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .info-item {
+            font-size: 14px;
+        }
+
+        .info-label {
+            color: #7f8c8d;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .state-section {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .state-section h3 {
+            font-size: 14px;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .state-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+        }
+
+        .state-item {
+            font-size: 13px;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+        }
+
+        .state-key {
+            color: #7f8c8d;
+            font-size: 11px;
+            margin-bottom: 2px;
+        }
+
+        .state-value {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        .commands-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .commands-section h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .command-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .command-btn {
+            padding: 8px 16px;
+            font-size: 13px;
+            background: #3498db;
+        }
+
+        .command-btn.danger {
+            background: #e74c3c;
+        }
+
+        .command-btn.danger:hover {
+            background: #c0392b;
+        }
+
+        .command-response {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #7f8c8d;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        .refresh-btn {
+            background: #95a5a6;
+            margin-left: auto;
+        }
+
+        .refresh-btn:hover {
+            background: #7f8c8d;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>🛵 Uplink Server</h1>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="api-key-section">
+            <h2>API Key Configuration</h2>
+            <div class="input-group">
+                <input type="password" id="apiKeyInput" placeholder="Enter API key">
+                <button id="saveKeyBtn">Save Key</button>
+                <button id="clearKeyBtn" class="refresh-btn">Clear Key</button>
+            </div>
+            <div id="apiKeyStatus"></div>
+        </div>
+
+        <div class="scooters-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h2 style="font-size: 20px; color: #2c3e50;">Connected Scooters</h2>
+                <button id="refreshBtn" class="refresh-btn">Refresh</button>
+            </div>
+            <div id="scootersContainer">
+                <div class="loading">Loading scooters...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        const API_KEY_STORAGE = 'uplink_api_key';
+
+        let apiKey = localStorage.getItem(API_KEY_STORAGE) || '';
+        let scootersData = [];
+        let scooterStates = {};
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            if (apiKey) {
+                document.getElementById('apiKeyInput').value = apiKey;
+                showStatus('apiKeyStatus', 'API key loaded from storage', 'info');
+                loadScooters();
+            }
+
+            document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
+            document.getElementById('clearKeyBtn').addEventListener('click', clearApiKey);
+            document.getElementById('refreshBtn').addEventListener('click', loadScooters);
+        });
+
+        function saveApiKey() {
+            const input = document.getElementById('apiKeyInput');
+            apiKey = input.value.trim();
+
+            if (!apiKey) {
+                showStatus('apiKeyStatus', 'Please enter an API key', 'error');
+                return;
+            }
+
+            localStorage.setItem(API_KEY_STORAGE, apiKey);
+            showStatus('apiKeyStatus', 'API key saved successfully', 'success');
+            loadScooters();
+        }
+
+        function clearApiKey() {
+            apiKey = '';
+            localStorage.removeItem(API_KEY_STORAGE);
+            document.getElementById('apiKeyInput').value = '';
+            showStatus('apiKeyStatus', 'API key cleared', 'info');
+            document.getElementById('scootersContainer').innerHTML = '<div class="empty-state"><h3>No API key configured</h3><p>Enter and save your API key to view scooters</p></div>';
+        }
+
+        function showStatus(elementId, message, type) {
+            const statusEl = document.getElementById(elementId);
+            statusEl.className = `status ${type}`;
+            statusEl.textContent = message;
+            statusEl.classList.remove('hidden');
+        }
+
+        async function apiRequest(endpoint, options = {}) {
+            if (!apiKey) {
+                throw new Error('No API key configured');
+            }
+
+            const response = await fetch(`${API_BASE}${endpoint}`, {
+                ...options,
+                headers: {
+                    'X-API-Key': apiKey,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ error: 'Request failed' }));
+                throw new Error(error.error || `HTTP ${response.status}`);
+            }
+
+            return response.json();
+        }
+
+        async function loadScooters() {
+            if (!apiKey) {
+                document.getElementById('scootersContainer').innerHTML = '<div class="empty-state"><h3>No API key configured</h3><p>Enter and save your API key to view scooters</p></div>';
+                return;
+            }
+
+            document.getElementById('scootersContainer').innerHTML = '<div class="loading">Loading scooters...</div>';
+
+            try {
+                const data = await apiRequest('/api/scooters');
+                scootersData = data.scooters || [];
+                renderScooters();
+            } catch (error) {
+                document.getElementById('scootersContainer').innerHTML = `<div class="empty-state"><h3>Error loading scooters</h3><p>${error.message}</p></div>`;
+            }
+        }
+
+        function renderScooters() {
+            const container = document.getElementById('scootersContainer');
+
+            if (scootersData.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No scooters connected</h3><p>Connect a scooter via WebSocket to see it here</p></div>';
+                return;
+            }
+
+            container.innerHTML = scootersData.map(scooter => `
+                <div class="scooter-card" id="scooter-${scooter.identifier}">
+                    <div class="scooter-header">
+                        <div class="scooter-id">${scooter.identifier}</div>
+                        <span class="scooter-status online">Connected</span>
+                    </div>
+
+                    <div class="scooter-info">
+                        <div class="info-item">
+                            <div class="info-label">Version</div>
+                            <div class="info-value">${scooter.version || 'Unknown'}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Connected At</div>
+                            <div class="info-value">${formatTime(scooter.connected_at)}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Last Seen</div>
+                            <div class="info-value">${formatTime(scooter.last_seen)}</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="info-label">Uptime</div>
+                            <div class="info-value">${formatDuration(scooter.uptime_seconds)}</div>
+                        </div>
+                    </div>
+
+                    <div class="state-section" id="state-${scooter.identifier}">
+                        <h3>State</h3>
+                        <div class="state-grid">
+                            <div class="info-item">
+                                <div class="info-label">Click "Refresh" to load state</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="commands-section">
+                        <h3>Send Command</h3>
+                        <div class="command-buttons">
+                            <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'lock')">Lock</button>
+                            <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'unlock')">Unlock</button>
+                            <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'ping')">Ping</button>
+                            <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'hibernate')">Hibernate</button>
+                            <button class="command-btn danger" onclick="sendCommand('${scooter.identifier}', 'reboot')">Reboot</button>
+                        </div>
+                        <div id="response-${scooter.identifier}" class="command-response hidden"></div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Load detailed info for each scooter
+            scootersData.forEach(scooter => loadScooterDetails(scooter.identifier));
+        }
+
+        async function loadScooterDetails(scooterId) {
+            try {
+                const data = await apiRequest(`/api/scooters/${scooterId}`);
+                updateScooterConnectionStats(scooterId, data);
+
+                // Load actual state data
+                const stateData = await apiRequest(`/api/scooters/${scooterId}/state`);
+                scooterStates[scooterId] = stateData;
+                updateScooterState(scooterId, stateData);
+            } catch (error) {
+                console.error(`Failed to load details for ${scooterId}:`, error);
+            }
+        }
+
+        function updateScooterConnectionStats(scooterId, data) {
+            const stateContainer = document.getElementById(`state-${scooterId}`);
+            if (!stateContainer) return;
+
+            let html = `<h3>Connection Stats</h3>
+                <div class="state-grid">
+                    <div class="state-item">
+                        <div class="state-key">Messages Sent</div>
+                        <div class="state-value">${data.messages_sent || 0}</div>
+                    </div>
+                    <div class="state-item">
+                        <div class="state-key">Messages Received</div>
+                        <div class="state-value">${data.messages_received || 0}</div>
+                    </div>
+                    <div class="state-item">
+                        <div class="state-key">Bytes Sent</div>
+                        <div class="state-value">${formatBytes(data.bytes_sent || 0)}</div>
+                    </div>
+                    <div class="state-item">
+                        <div class="state-key">Bytes Received</div>
+                        <div class="state-value">${formatBytes(data.bytes_received || 0)}</div>
+                    </div>
+                    <div class="state-item">
+                        <div class="state-key">Telemetry Received</div>
+                        <div class="state-value">${data.telemetry_received || 0}</div>
+                    </div>
+                    <div class="state-item">
+                        <div class="state-key">Commands Sent</div>
+                        <div class="state-value">${data.commands_sent || 0}</div>
+                    </div>
+                </div>`;
+
+            stateContainer.innerHTML = html;
+        }
+
+        function updateScooterState(scooterId, stateData) {
+            const stateContainer = document.getElementById(`state-${scooterId}`);
+            if (!stateContainer) return;
+
+            const state = stateData.state || {};
+
+            // Build state display grouped by component
+            let componentSections = [];
+            for (const [component, fields] of Object.entries(state)) {
+                if (typeof fields === 'object' && fields !== null) {
+                    let fieldItems = [];
+                    for (const [key, value] of Object.entries(fields)) {
+                        fieldItems.push(`
+                            <div class="state-item">
+                                <div class="state-key">${key}</div>
+                                <div class="state-value">${value}</div>
+                            </div>
+                        `);
+                    }
+
+                    if (fieldItems.length > 0) {
+                        componentSections.push(`
+                            <div style="margin-bottom: 15px;">
+                                <h4 style="font-size: 13px; color: #2c3e50; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">${component}</h4>
+                                <div class="state-grid">
+                                    ${fieldItems.join('')}
+                                </div>
+                            </div>
+                        `);
+                    }
+                }
+            }
+
+            if (componentSections.length > 0) {
+                const stateHtml = `
+                    <h3>Scooter State</h3>
+                    ${componentSections.join('')}
+                `;
+                stateContainer.innerHTML += stateHtml;
+            }
+        }
+
+        async function sendCommand(scooterId, command) {
+            const responseEl = document.getElementById(`response-${scooterId}`);
+            responseEl.classList.remove('hidden');
+            responseEl.textContent = `Sending ${command} command...`;
+
+            try {
+                const result = await apiRequest('/api/commands', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        scooter_id: scooterId,
+                        command: command,
+                        params: {}
+                    })
+                });
+
+                responseEl.textContent = `✓ Command sent successfully\nRequest ID: ${result.request_id}`;
+
+                // Poll for response
+                setTimeout(() => checkCommandResponse(result.request_id, responseEl), 1000);
+            } catch (error) {
+                responseEl.textContent = `✗ Error: ${error.message}`;
+            }
+        }
+
+        async function checkCommandResponse(requestId, responseEl) {
+            try {
+                const result = await apiRequest(`/api/commands/${requestId}`);
+
+                if (result.status === 'pending') {
+                    responseEl.textContent += '\nWaiting for response...';
+                    setTimeout(() => checkCommandResponse(requestId, responseEl), 2000);
+                } else {
+                    responseEl.textContent = `✓ Response received\nStatus: ${result.status}\n` +
+                        (result.result ? `Result: ${JSON.stringify(result.result, null, 2)}` : '') +
+                        (result.error ? `Error: ${result.error}` : '');
+                }
+            } catch (error) {
+                console.error('Failed to check command response:', error);
+            }
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return 'Unknown';
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString();
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds) return '0s';
+            if (seconds < 60) return `${Math.floor(seconds)}s`;
+            if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+            return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+        }
+
+        function formatBytes(bytes) {
+            if (!bytes) return '0 B';
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / 1048576).toFixed(1)} MB`;
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            if (apiKey) {
+                loadScooters();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>

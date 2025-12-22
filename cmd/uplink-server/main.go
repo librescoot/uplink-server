@@ -35,6 +35,7 @@ func main() {
 	authenticator := auth.NewAuthenticator(config)
 	connMgr := storage.NewConnectionManager()
 	responseStore := storage.NewResponseStore(1 * time.Hour)
+	stateStore := storage.NewStateStore()
 
 	// Start stats logger
 	connMgr.StartStatsLogger(config.Logging.GetStatsInterval())
@@ -44,12 +45,14 @@ func main() {
 		authenticator,
 		connMgr,
 		responseStore,
+		stateStore,
 		config.Server.GetKeepaliveInterval(),
 	)
 
-	apiHandler := handlers.NewAPIHandler(wsHandler, connMgr, responseStore, config.Auth.APIKey)
+	apiHandler := handlers.NewAPIHandler(wsHandler, connMgr, responseStore, stateStore, config.Auth.APIKey)
 
 	// Setup routes
+	http.HandleFunc("/", serveWebUI)
 	http.HandleFunc("/ws", wsHandler.HandleConnection)
 	http.HandleFunc("/api/commands", apiHandler.HandleCommands)
 	http.HandleFunc("/api/commands/", apiHandler.HandleCommandResponse)
@@ -92,4 +95,14 @@ func loadConfig(path string) (*models.Config, error) {
 	}
 
 	return &config, nil
+}
+
+func serveWebUI(w http.ResponseWriter, r *http.Request) {
+	// Only serve index.html at root path
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, "web/index.html")
 }
