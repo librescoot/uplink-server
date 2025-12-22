@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Uplink Server</title>
+    <title>LibreScoot Uplink Server</title>
     <style>
         * {
             margin: 0;
@@ -12,7 +12,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: #f5f5f5;
             color: #333;
             line-height: 1.6;
@@ -21,35 +21,127 @@
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 0 20px;
+        }
+
+        body > .container {
+            margin-top: 8px;
+        }
+
+        header .container {
+            padding: 0 20px;
         }
 
         header {
-            background: #2c3e50;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 20px 0;
-            margin-bottom: 30px;
+            padding: 8px 0;
+            margin-bottom: 12px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
 
         header h1 {
-            font-size: 24px;
+            font-size: 16px;
             font-weight: 600;
+            display: flex;
+            align-items: center;
         }
 
-        .api-key-section {
-            background: white;
-            padding: 20px;
+        header h1 img {
+            height: 48px;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 12px;
+        }
+
+        .icon-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            width: 40px;
+            height: 40px;
             border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+            position: relative;
         }
 
-        .api-key-section h2 {
+        .icon-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+        }
+
+        .icon-btn.error::after {
+            content: '';
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            width: 10px;
+            height: 10px;
+            background: #e74c3c;
+            border-radius: 50%;
+            border: 2px solid #2c3e50;
+        }
+
+        .dialog-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .dialog-overlay.show {
+            display: flex;
+        }
+
+        .dialog {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .dialog h2 {
             font-size: 18px;
-            margin-bottom: 15px;
+            margin-bottom: 16px;
             color: #2c3e50;
         }
+
+        .dialog-close {
+            float: right;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #7f8c8d;
+            padding: 0;
+            width: auto;
+            line-height: 1;
+        }
+
+        .dialog-close:hover {
+            color: #2c3e50;
+        }
+
 
         .input-group {
             display: flex;
@@ -112,7 +204,6 @@
         }
 
         .scooters-section {
-            margin-top: 20px;
         }
 
         .scooter-card {
@@ -124,12 +215,31 @@
         }
 
         .scooter-header {
+            padding-bottom: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .scooter-title {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
+        }
+
+        .connection-status {
+            font-size: 12px;
+            color: #7f8c8d;
+            padding-top: 6px;
+        }
+
+        .state-section {
+            margin-top: 15px;
+        }
+
+        .state-section h3 {
+            font-size: 14px;
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 10px;
         }
 
         .scooter-id {
@@ -138,17 +248,51 @@
             color: #2c3e50;
         }
 
-        .scooter-status {
-            display: inline-block;
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
+        .state-badge {
+            font-size: 11px;
+            color: #7f8c8d;
+            margin-top: 4px;
         }
 
-        .scooter-status.online {
-            background: #d4edda;
+        .state-badge span {
+            display: inline-block;
+            margin-right: 8px;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 500;
             color: #155724;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #28a745;
+        }
+
+        .status-dot.online {
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .status-dot.offline {
+            background: #dc3545;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+            }
+            50% {
+                opacity: 0.8;
+                box-shadow: 0 0 0 6px rgba(40, 167, 69, 0);
+            }
         }
 
         .scooter-info {
@@ -175,56 +319,115 @@
             font-weight: 500;
         }
 
-        .state-section {
+        details {
             margin-top: 15px;
             padding: 15px;
             background: #f8f9fa;
             border-radius: 4px;
-        }
-
-        .state-section h3 {
-            font-size: 14px;
-            color: #7f8c8d;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .state-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 10px;
-        }
-
-        .state-item {
-            font-size: 13px;
-            padding: 8px;
-            background: white;
-            border-radius: 4px;
             border: 1px solid #e9ecef;
         }
 
-        .state-key {
-            color: #7f8c8d;
-            font-size: 11px;
-            margin-bottom: 2px;
+        summary {
+            font-size: 14px;
+            color: #2c3e50;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
 
-        .state-value {
+        summary::-webkit-details-marker {
+            display: none;
+        }
+
+        details > summary::after {
+            content: '▼';
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+
+        details[open] > summary::after {
+            content: '▲';
+        }
+
+        details details summary::after {
+            content: '▼';
+        }
+
+        details details[open] summary::after {
+            content: '▲';
+        }
+
+        details > *:not(summary) {
+            margin-top: 10px;
+        }
+
+        .state-table {
+            width: 100%;
+            font-size: 13px;
+            border-collapse: collapse;
+        }
+
+        .state-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .state-table td:first-child {
+            color: #7f8c8d;
+            width: 50%;
+        }
+
+        .state-table td:last-child {
             color: #2c3e50;
             font-weight: 500;
+            width: 50%;
+        }
+
+        .state-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        details details {
+            margin-top: 10px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 4px;
+        }
+
+        details details summary {
+            font-size: 12px;
+            text-transform: none;
+            padding: 10px;
+            background: none;
+        }
+
+        details details[open] summary {
+            border-bottom: 1px solid #e9ecef;
+            margin-bottom: 10px;
+        }
+
+        details details[open] {
+            padding: 10px;
         }
 
         .commands-section {
             margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #eee;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
         }
 
         .commands-section h3 {
             font-size: 14px;
             margin-bottom: 10px;
             color: #2c3e50;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .command-buttons {
@@ -285,17 +488,85 @@
         .hidden {
             display: none;
         }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 12px 0;
+                margin-bottom: 12px;
+            }
+
+            header .container {
+                padding: 0 8px;
+            }
+
+            header h1 {
+                font-size: 16px;
+            }
+
+            .container {
+                padding: 12px;
+            }
+
+            .api-key-section {
+                padding: 12px;
+                margin-bottom: 12px;
+            }
+
+            .api-key-section h2 {
+                font-size: 14px;
+                margin-bottom: 10px;
+            }
+
+            .input-group {
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .input-group button {
+                width: 100%;
+                padding: 8px 16px;
+                font-size: 13px;
+            }
+
+            input[type="text"], input[type="password"] {
+                padding: 8px;
+                font-size: 13px;
+            }
+
+            .status {
+                padding: 8px;
+                font-size: 12px;
+                margin-top: 8px;
+            }
+
+            .refresh-btn {
+                padding: 8px 16px;
+                margin-left: 0;
+                width: auto;
+            }
+
+            .status-indicator span:not(.status-dot) {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
     <header>
         <div class="container">
-            <h1>🛵 Uplink Server</h1>
+            <div class="header-content">
+                <h1><img src="/images/logo-small.png" srcset="/images/logo-small@2x.png 2x" alt="LibreScoot Uplink Server"></h1>
+                <div class="header-buttons">
+                    <button class="icon-btn" id="apiKeyBtn" title="API Key">🔑</button>
+                    <button class="icon-btn" id="refreshBtn" title="Refresh">🔄</button>
+                </div>
+            </div>
         </div>
     </header>
 
-    <div class="container">
-        <div class="api-key-section">
+    <div class="dialog-overlay" id="apiKeyDialog">
+        <div class="dialog">
+            <button class="dialog-close" onclick="closeApiKeyDialog()">×</button>
             <h2>API Key Configuration</h2>
             <div class="input-group">
                 <input type="password" id="apiKeyInput" placeholder="Enter API key">
@@ -304,12 +575,10 @@
             </div>
             <div id="apiKeyStatus"></div>
         </div>
+    </div>
 
+    <div class="container">
         <div class="scooters-section">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h2 style="font-size: 20px; color: #2c3e50;">Connected Scooters</h2>
-                <button id="refreshBtn" class="refresh-btn">Refresh</button>
-            </div>
             <div id="scootersContainer">
                 <div class="loading">Loading scooters...</div>
             </div>
@@ -328,14 +597,38 @@
         document.addEventListener('DOMContentLoaded', () => {
             if (apiKey) {
                 document.getElementById('apiKeyInput').value = apiKey;
-                showStatus('apiKeyStatus', 'API key loaded from storage', 'info');
                 loadScooters();
+            } else {
+                openApiKeyDialog();
             }
 
+            document.getElementById('apiKeyBtn').addEventListener('click', openApiKeyDialog);
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
             document.getElementById('clearKeyBtn').addEventListener('click', clearApiKey);
             document.getElementById('refreshBtn').addEventListener('click', loadScooters);
+
+            // Close dialog when clicking overlay
+            document.getElementById('apiKeyDialog').addEventListener('click', (e) => {
+                if (e.target.id === 'apiKeyDialog') closeApiKeyDialog();
+            });
         });
+
+        function openApiKeyDialog() {
+            document.getElementById('apiKeyDialog').classList.add('show');
+        }
+
+        function closeApiKeyDialog() {
+            document.getElementById('apiKeyDialog').classList.remove('show');
+        }
+
+        function setApiKeyError(hasError) {
+            const btn = document.getElementById('apiKeyBtn');
+            if (hasError) {
+                btn.classList.add('error');
+            } else {
+                btn.classList.remove('error');
+            }
+        }
 
         function saveApiKey() {
             const input = document.getElementById('apiKeyInput');
@@ -348,7 +641,11 @@
 
             localStorage.setItem(API_KEY_STORAGE, apiKey);
             showStatus('apiKeyStatus', 'API key saved successfully', 'success');
-            loadScooters();
+            setApiKeyError(false);
+            setTimeout(() => {
+                closeApiKeyDialog();
+                loadScooters();
+            }, 500);
         }
 
         function clearApiKey() {
@@ -356,6 +653,7 @@
             localStorage.removeItem(API_KEY_STORAGE);
             document.getElementById('apiKeyInput').value = '';
             showStatus('apiKeyStatus', 'API key cleared', 'info');
+            setApiKeyError(false);
             document.getElementById('scootersContainer').innerHTML = '<div class="empty-state"><h3>No API key configured</h3><p>Enter and save your API key to view scooters</p></div>';
         }
 
@@ -399,8 +697,15 @@
             try {
                 const data = await apiRequest('/api/scooters');
                 scootersData = data.scooters || [];
+                setApiKeyError(false);
                 renderScooters();
             } catch (error) {
+                if (error.message.includes('401') || error.message.toLowerCase().includes('unauthorized') || error.message.toLowerCase().includes('invalid api key')) {
+                    setApiKeyError(true);
+                    openApiKeyDialog();
+                    showStatus('apiKeyStatus', 'Invalid API key. Please check and update.', 'error');
+                    document.getElementById('apiKeyInput').focus();
+                }
                 document.getElementById('scootersContainer').innerHTML = `<div class="empty-state"><h3>Error loading scooters</h3><p>${error.message}</p></div>`;
             }
         }
@@ -416,48 +721,33 @@
             container.innerHTML = scootersData.map(scooter => `
                 <div class="scooter-card" id="scooter-${scooter.identifier}">
                     <div class="scooter-header">
-                        <div class="scooter-id">${scooter.identifier}</div>
-                        <span class="scooter-status online">Connected</span>
-                    </div>
-
-                    <div class="scooter-info">
-                        <div class="info-item">
-                            <div class="info-label">Version</div>
-                            <div class="info-value">${scooter.version || 'Unknown'}</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Connected At</div>
-                            <div class="info-value">${formatTime(scooter.connected_at)}</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Last Seen</div>
-                            <div class="info-value">${formatTime(scooter.last_seen)}</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Uptime</div>
-                            <div class="info-value">${formatDuration(scooter.uptime_seconds)}</div>
-                        </div>
-                    </div>
-
-                    <div class="state-section" id="state-${scooter.identifier}">
-                        <h3>State</h3>
-                        <div class="state-grid">
-                            <div class="info-item">
-                                <div class="info-label">Click "Refresh" to load state</div>
+                        <div class="scooter-title">
+                            <div>
+                                <div class="scooter-id">${scooter.identifier}</div>
+                                <div class="state-badge" id="badge-${scooter.identifier}"></div>
                             </div>
+                            <div class="status-indicator">
+                                <span class="status-dot online"></span>
+                                <span>Connected</span>
+                            </div>
+                        </div>
+                        <div class="connection-status" id="connection-${scooter.identifier}">
+                            ${scooter.version || 'Unknown'} · ${formatDuration(scooter.uptime_seconds)} uptime
                         </div>
                     </div>
 
                     <div class="commands-section">
-                        <h3>Send Command</h3>
                         <div class="command-buttons">
                             <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'lock')">Lock</button>
                             <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'unlock')">Unlock</button>
-                            <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'ping')">Ping</button>
-                            <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'hibernate')">Hibernate</button>
-                            <button class="command-btn danger" onclick="sendCommand('${scooter.identifier}', 'reboot')">Reboot</button>
+                            <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'get_state')">Refresh</button>
+                            <button class="command-btn" onclick="if(confirm('Put scooter into hibernate mode?')) sendCommand('${scooter.identifier}', 'hibernate')">Hibernate</button>
                         </div>
                         <div id="response-${scooter.identifier}" class="command-response hidden"></div>
+                    </div>
+
+                    <div class="state-section" id="state-${scooter.identifier}">
+                        <p style="color: #7f8c8d; font-size: 13px;">Loading...</p>
                     </div>
                 </div>
             `).join('');
@@ -481,38 +771,16 @@
         }
 
         function updateScooterConnectionStats(scooterId, data) {
-            const stateContainer = document.getElementById(`state-${scooterId}`);
-            if (!stateContainer) return;
+            const connectionContainer = document.getElementById(`connection-${scooterId}`);
+            if (!connectionContainer) return;
 
-            let html = `<h3>Connection Stats</h3>
-                <div class="state-grid">
-                    <div class="state-item">
-                        <div class="state-key">Messages Sent</div>
-                        <div class="state-value">${data.messages_sent || 0}</div>
-                    </div>
-                    <div class="state-item">
-                        <div class="state-key">Messages Received</div>
-                        <div class="state-value">${data.messages_received || 0}</div>
-                    </div>
-                    <div class="state-item">
-                        <div class="state-key">Bytes Sent</div>
-                        <div class="state-value">${formatBytes(data.bytes_sent || 0)}</div>
-                    </div>
-                    <div class="state-item">
-                        <div class="state-key">Bytes Received</div>
-                        <div class="state-value">${formatBytes(data.bytes_received || 0)}</div>
-                    </div>
-                    <div class="state-item">
-                        <div class="state-key">Telemetry Received</div>
-                        <div class="state-value">${data.telemetry_received || 0}</div>
-                    </div>
-                    <div class="state-item">
-                        <div class="state-key">Commands Sent</div>
-                        <div class="state-value">${data.commands_sent || 0}</div>
-                    </div>
-                </div>`;
+            const uptime = formatDuration(data.uptime_seconds || 0);
+            const bytesSent = formatBytes(data.bytes_sent || 0);
+            const bytesRecv = formatBytes(data.bytes_received || 0);
+            const tel = data.telemetry_received || 0;
+            const cmd = data.commands_sent || 0;
 
-            stateContainer.innerHTML = html;
+            connectionContainer.textContent = `${data.version || 'Unknown'} · ${uptime} · ↑${bytesSent} ↓${bytesRecv} · Tel:${tel} Cmd:${cmd}`;
         }
 
         function updateScooterState(scooterId, stateData) {
@@ -521,39 +789,60 @@
 
             const state = stateData.state || {};
 
+            // Update badge with key info
+            const badge = document.getElementById(`badge-${scooterId}`);
+            if (badge) {
+                let badgeItems = [];
+
+                if (state.vehicle && state.vehicle.state) {
+                    badgeItems.push(`<span>${state.vehicle.state}</span>`);
+                }
+
+                // Battery display logic
+                const bat0 = state['battery:0'];
+                const bat1 = state['battery:1'];
+
+                if (!bat0 || bat0.present !== 'true') {
+                    badgeItems.push(`<span>🔋-</span>`);
+                } else {
+                    let batteryText = '🔋' + bat0.charge + '%';
+                    if (bat1 && bat1.present === 'true' && bat1.charge) {
+                        batteryText += ' ' + bat1.charge + '%';
+                    }
+                    badgeItems.push(`<span>${batteryText}</span>`);
+                }
+
+                if (state.vehicle && state.vehicle['seatbox:lock']) {
+                    badgeItems.push(`<span>🔒${state.vehicle['seatbox:lock']}</span>`);
+                }
+
+                badge.innerHTML = badgeItems.join('');
+            }
+
             // Build state display grouped by component
             let componentSections = [];
             for (const [component, fields] of Object.entries(state)) {
                 if (typeof fields === 'object' && fields !== null) {
-                    let fieldItems = [];
+                    let tableRows = [];
                     for (const [key, value] of Object.entries(fields)) {
-                        fieldItems.push(`
-                            <div class="state-item">
-                                <div class="state-key">${key}</div>
-                                <div class="state-value">${value}</div>
-                            </div>
-                        `);
+                        tableRows.push(`<tr><td>${key}</td><td>${value}</td></tr>`);
                     }
 
-                    if (fieldItems.length > 0) {
+                    if (tableRows.length > 0) {
                         componentSections.push(`
-                            <div style="margin-bottom: 15px;">
-                                <h4 style="font-size: 13px; color: #2c3e50; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">${component}</h4>
-                                <div class="state-grid">
-                                    ${fieldItems.join('')}
-                                </div>
-                            </div>
+                            <details>
+                                <summary>${component}</summary>
+                                <table class="state-table">
+                                    ${tableRows.join('')}
+                                </table>
+                            </details>
                         `);
                     }
                 }
             }
 
             if (componentSections.length > 0) {
-                const stateHtml = `
-                    <h3>Scooter State</h3>
-                    ${componentSections.join('')}
-                `;
-                stateContainer.innerHTML += stateHtml;
+                stateContainer.innerHTML = componentSections.join('');
             }
         }
 
