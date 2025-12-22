@@ -355,11 +355,16 @@
         }
 
         details {
-            margin-top: 15px;
             padding: 15px;
             background: #f8f9fa;
-            border-radius: 4px;
+            border-radius: 6px;
             border: 1px solid #e9ecef;
+            transition: box-shadow 0.2s;
+            margin-bottom: 12px;
+        }
+
+        details:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
         }
 
         summary {
@@ -642,7 +647,7 @@
             document.getElementById('apiKeyBtn').addEventListener('click', openApiKeyDialog);
             document.getElementById('saveKeyBtn').addEventListener('click', saveApiKey);
             document.getElementById('clearKeyBtn').addEventListener('click', clearApiKey);
-            document.getElementById('refreshBtn').addEventListener('click', loadScooters);
+            document.getElementById('refreshBtn').addEventListener('click', refreshAllScooters);
 
             // Close dialog when clicking overlay
             document.getElementById('apiKeyDialog').addEventListener('click', (e) => {
@@ -727,6 +732,12 @@
             return response.json();
         }
 
+        function refreshAllScooters() {
+            scootersData.forEach(scooter => {
+                sendCommand(scooter.identifier, 'get_state');
+            });
+        }
+
         async function loadScooters() {
             if (!apiKey) {
                 document.getElementById('scootersContainer').innerHTML = '<div class="empty-state"><h3>No API key configured</h3><p>Enter and save your API key to view scooters</p></div>';
@@ -789,6 +800,12 @@
 
         function renderScooters() {
             const container = document.getElementById('scootersContainer');
+
+            // Remove loading/empty state messages
+            const loadingEl = container.querySelector('.loading, .empty-state');
+            if (loadingEl) {
+                loadingEl.remove();
+            }
 
             if (scootersData.length === 0) {
                 container.innerHTML = '<div class="empty-state"><h3>No scooters connected</h3><p>Connect a scooter via WebSocket to see it here</p></div>';
