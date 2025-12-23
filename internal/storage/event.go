@@ -147,6 +147,52 @@ func (s *EventStore) appendToFile(event *Event) {
 	}
 }
 
+// rewriteFile rewrites the entire events file with current in-memory events
+func (s *EventStore) rewriteFile() {
+	if s.filePath == "" {
+		return
+	}
+
+	// Ensure directory exists
+	dir := filepath.Dir(s.filePath)
+	os.MkdirAll(dir, 0755)
+
+	// Create temporary file
+	tmpPath := s.filePath + ".tmp"
+	file, err := os.OpenFile(tmpPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		log.Printf("[EventStore] Failed to create temp events file: %v", err)
+		return
+	}
+
+	// Write all events (oldest first for file format)
+	for _, events := range s.events {
+		// Events are stored newest-first in memory, reverse for file
+		for i := len(events) - 1; i >= 0; i-- {
+			data, err := json.Marshal(events[i])
+			if err != nil {
+				log.Printf("[EventStore] Failed to marshal event: %v", err)
+				continue
+			}
+
+			if _, err := file.Write(append(data, '\n')); err != nil {
+				log.Printf("[EventStore] Failed to write event to file: %v", err)
+				file.Close()
+				os.Remove(tmpPath)
+				return
+			}
+		}
+	}
+
+	file.Close()
+
+	// Atomically replace the old file
+	if err := os.Rename(tmpPath, s.filePath); err != nil {
+		log.Printf("[EventStore] Failed to replace events file: %v", err)
+		os.Remove(tmpPath)
+	}
+}
+
 // AddEvent stores a new event for a scooter
 func (s *EventStore) AddEvent(scooterID, eventName string, data map[string]any, timestamp time.Time) {
 	// Generate unique ID using timestamp and nanoseconds
@@ -228,6 +274,7 @@ func (s *EventStore) DeleteEvent(scooterID, eventID string) bool {
 	for i, event := range events {
 		if event.ID == eventID {
 			s.events[scooterID] = append(events[:i], events[i+1:]...)
+			s.rewriteFile()
 			return true
 		}
 	}
@@ -241,4 +288,5 @@ func (s *EventStore) ClearEvents(scooterID string) {
 	defer s.mu.Unlock()
 
 	delete(s.events, scooterID)
+	s.rewriteFile()
 }
