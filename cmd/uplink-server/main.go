@@ -36,6 +36,7 @@ func main() {
 	connMgr := storage.NewConnectionManager()
 	responseStore := storage.NewResponseStore(1 * time.Hour)
 	stateStore := storage.NewStateStore()
+	eventStore := storage.NewEventStore(1000) // Keep last 1000 events per scooter
 
 	// Start stats logger
 	connMgr.StartStatsLogger(config.Logging.GetStatsInterval())
@@ -46,10 +47,11 @@ func main() {
 		connMgr,
 		responseStore,
 		stateStore,
+		eventStore,
 		config.Server.GetKeepaliveInterval(),
 	)
 
-	apiHandler := handlers.NewAPIHandler(wsHandler, connMgr, responseStore, stateStore, config.Auth.APIKey)
+	apiHandler := handlers.NewAPIHandler(wsHandler, connMgr, responseStore, stateStore, eventStore, config.Auth.APIKey)
 
 	// Setup routes
 	if config.Server.EnableWebUI {
@@ -57,7 +59,7 @@ func main() {
 		http.HandleFunc("/images/", serveImages)
 
 		// WebSocket for web UI real-time updates
-		webUIHandler := handlers.NewWebUIHandler(stateStore, connMgr, config.Auth.APIKey)
+		webUIHandler := handlers.NewWebUIHandler(stateStore, eventStore, connMgr, config.Auth.APIKey)
 		http.HandleFunc("/ws/web", webUIHandler.HandleWebConnection)
 
 		log.Printf("Web UI enabled at /")

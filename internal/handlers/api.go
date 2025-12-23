@@ -16,16 +16,18 @@ type APIHandler struct {
 	connMgr       *storage.ConnectionManager
 	responseStore *storage.ResponseStore
 	stateStore    *storage.StateStore
+	eventStore    *storage.EventStore
 	apiKey        string
 }
 
 // NewAPIHandler creates a new API handler
-func NewAPIHandler(ws *WebSocketHandler, mgr *storage.ConnectionManager, store *storage.ResponseStore, stateStore *storage.StateStore, apiKey string) *APIHandler {
+func NewAPIHandler(ws *WebSocketHandler, mgr *storage.ConnectionManager, store *storage.ResponseStore, stateStore *storage.StateStore, eventStore *storage.EventStore, apiKey string) *APIHandler {
 	return &APIHandler{
 		wsHandler:     ws,
 		connMgr:       mgr,
 		responseStore: store,
 		stateStore:    stateStore,
+		eventStore:    eventStore,
 		apiKey:        apiKey,
 	}
 }
@@ -100,6 +102,13 @@ func (h *APIHandler) HandleScooterDetail(w http.ResponseWriter, r *http.Request)
 				return
 			}
 			h.handleGetScooterState(w, r, scooterID)
+		} else if isEventsRequest(r.URL.Path) {
+			scooterID := extractScooterIDFromEventsPath(r.URL.Path)
+			if scooterID == "" {
+				h.writeError(w, http.StatusBadRequest, "Scooter ID required")
+				return
+			}
+			h.handleGetScooterEvents(w, r, scooterID)
 		} else {
 			scooterID := extractPathParam(r.URL.Path, "/api/scooters/")
 			if scooterID == "" {
@@ -365,4 +374,33 @@ func extractScooterIDFromStatePath(path string) string {
 	path = strings.TrimPrefix(path, "/api/scooters/")
 	path = strings.TrimSuffix(path, "/state")
 	return path
+}
+
+// isEventsRequest checks if path is for events data
+func isEventsRequest(path string) bool {
+	return strings.HasSuffix(path, "/events")
+}
+
+// extractScooterIDFromEventsPath extracts scooter ID from /api/scooters/{id}/events
+func extractScooterIDFromEventsPath(path string) string {
+	path = strings.TrimPrefix(path, "/api/scooters/")
+	path = strings.TrimSuffix(path, "/events")
+	return path
+}
+
+// handleGetScooterEvents retrieves events for a scooter
+func (h *APIHandler) handleGetScooterEvents(w http.ResponseWriter, r *http.Request, scooterID string) {
+	_, exists := h.connMgr.GetConnection(scooterID)
+	if !exists {
+		h.writeError(w, http.StatusNotFound, "Scooter not connected")
+		return
+	}
+
+	events := h.eventStore.GetEvents(scooterID, 100) // Get last 100 events
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"scooter_id": scooterID,
+		"events":     events,
+		"total":      len(events),
+	})
 }

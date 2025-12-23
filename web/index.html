@@ -242,6 +242,54 @@
             }
         }
 
+        .events-section {
+            margin-top: 15px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .events-section h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #2c3e50;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .event-item {
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-left: 3px solid #3498db;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .event-name {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .event-time {
+            color: #7f8c8d;
+            font-size: 12px;
+        }
+
+        .event-data {
+            font-family: ui-monospace, 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Menlo, Consolas, monospace;
+            font-size: 12px;
+            color: #555;
+            white-space: pre-wrap;
+            margin-top: 4px;
+        }
+
         .state-section {
             margin-top: 15px;
         }
@@ -1033,6 +1081,13 @@
                         <div id="response-${scooter.identifier}" class="command-response hidden" onclick="this.classList.add('hidden')" title="Click to dismiss"></div>
                     </div>
 
+                    <div class="events-section" id="events-section-${scooter.identifier}">
+                        <h3>Events</h3>
+                        <div id="events-${scooter.identifier}">
+                            <p style="color: #7f8c8d; font-size: 13px;">No events yet</p>
+                        </div>
+                    </div>
+
                     <div class="state-section" id="state-${scooter.identifier}">
                         <p style="color: #7f8c8d; font-size: 13px;">Loading...</p>
                     </div>
@@ -1084,9 +1139,48 @@
                 const stateData = await apiRequest(`/api/scooters/${scooterId}/state`);
                 scooterStates[scooterId] = stateData;
                 updateScooterState(scooterId, stateData);
+
+                // Load events
+                loadScooterEvents(scooterId);
             } catch (error) {
                 console.error(`Failed to load details for ${scooterId}:`, error);
             }
+        }
+
+        async function loadScooterEvents(scooterId) {
+            try {
+                const data = await apiRequest(`/api/scooters/${scooterId}/events`);
+                displayEvents(scooterId, data.events || []);
+            } catch (error) {
+                console.error(`Failed to load events for ${scooterId}:`, error);
+            }
+        }
+
+        function displayEvents(scooterId, events) {
+            const container = document.getElementById(`events-${scooterId}`);
+            if (!container) return;
+
+            if (events.length === 0) {
+                container.innerHTML = '<p style="color: #7f8c8d; font-size: 13px;">No events yet</p>';
+                return;
+            }
+
+            container.innerHTML = events.map(event => {
+                const time = new Date(event.timestamp).toLocaleString();
+                const dataStr = event.data && Object.keys(event.data).length > 0
+                    ? JSON.stringify(event.data, null, 2)
+                    : '';
+
+                return `
+                    <div class="event-item">
+                        <div class="event-header">
+                            <span class="event-name">${event.event}</span>
+                            <span class="event-time">${time}</span>
+                        </div>
+                        ${dataStr ? `<div class="event-data">${dataStr}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
         }
 
         function updateScooterConnectionStats(scooterId, data) {
@@ -1442,7 +1536,45 @@
                         setScooterOffline(msg.scooter_id);
                     }
                     break;
+
+                case 'event':
+                    // Add new event to the top of the list
+                    addEventToDisplay(msg.scooter_id, {
+                        event: msg.event,
+                        data: msg.event_data || {},
+                        timestamp: msg.timestamp
+                    });
+                    break;
             }
+        }
+
+        function addEventToDisplay(scooterId, event) {
+            const container = document.getElementById(`events-${scooterId}`);
+            if (!container) return;
+
+            const time = new Date(event.timestamp).toLocaleString();
+            const dataStr = event.data && Object.keys(event.data).length > 0
+                ? JSON.stringify(event.data, null, 2)
+                : '';
+
+            const eventHtml = `
+                <div class="event-item">
+                    <div class="event-header">
+                        <span class="event-name">${event.event}</span>
+                        <span class="event-time">${time}</span>
+                    </div>
+                    ${dataStr ? `<div class="event-data">${dataStr}</div>` : ''}
+                </div>
+            `;
+
+            // Remove "No events" message if present
+            const noEvents = container.querySelector('p');
+            if (noEvents) {
+                container.innerHTML = '';
+            }
+
+            // Prepend new event (most recent first)
+            container.insertAdjacentHTML('afterbegin', eventHtml);
         }
 
         function setScooterOnline(scooterId) {

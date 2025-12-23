@@ -19,14 +19,16 @@ var webUpgrader = websocket.Upgrader{
 // WebUIHandler handles WebSocket connections from web UI clients
 type WebUIHandler struct {
 	stateStore *storage.StateStore
+	eventStore *storage.EventStore
 	connMgr    *storage.ConnectionManager
 	apiKey     string
 }
 
 // NewWebUIHandler creates a new web UI WebSocket handler
-func NewWebUIHandler(stateStore *storage.StateStore, connMgr *storage.ConnectionManager, apiKey string) *WebUIHandler {
+func NewWebUIHandler(stateStore *storage.StateStore, eventStore *storage.EventStore, connMgr *storage.ConnectionManager, apiKey string) *WebUIHandler {
 	return &WebUIHandler{
 		stateStore: stateStore,
+		eventStore: eventStore,
 		connMgr:    connMgr,
 		apiKey:     apiKey,
 	}
@@ -34,14 +36,16 @@ func NewWebUIHandler(stateStore *storage.StateStore, connMgr *storage.Connection
 
 // WebMessage represents a message sent to/from web UI clients
 type WebMessage struct {
-	Type      string         `json:"type"`
-	Scooters  []ScooterInfo  `json:"scooters,omitempty"`
-	Scooter   *ScooterInfo   `json:"scooter,omitempty"`
-	ScooterID string         `json:"scooter_id,omitempty"`
-	State     map[string]any `json:"state,omitempty"`
-	UpdateType string        `json:"update_type,omitempty"` // "full" or "delta"
-	Error     string         `json:"error,omitempty"`
-	Timestamp string         `json:"timestamp,omitempty"`
+	Type       string         `json:"type"`
+	Scooters   []ScooterInfo  `json:"scooters,omitempty"`
+	Scooter    *ScooterInfo   `json:"scooter,omitempty"`
+	ScooterID  string         `json:"scooter_id,omitempty"`
+	State      map[string]any `json:"state,omitempty"`
+	UpdateType string         `json:"update_type,omitempty"` // "full" or "delta"
+	Event      string         `json:"event,omitempty"`
+	EventData  map[string]any `json:"event_data,omitempty"`
+	Error      string         `json:"error,omitempty"`
+	Timestamp  string         `json:"timestamp,omitempty"`
 }
 
 // ScooterInfo represents scooter connection information
@@ -90,12 +94,16 @@ func (h *WebUIHandler) HandleWebConnection(w http.ResponseWriter, r *http.Reques
 		// The StateStore manages subscriber lifecycle
 	}()
 
+	// Subscribe to event updates
+	eventChan := h.eventStore.Subscribe()
+
 	// Send initial state for all connected scooters
 	h.sendInitialStates(conn)
 
-	// Start goroutine to listen for state updates and broadcast to client
+	// Start goroutines to listen for updates and broadcast to client
 	done := make(chan struct{})
 	go h.broadcastUpdates(conn, updateChan, done)
+	go h.broadcastEvents(conn, eventChan, done)
 
 	// Keep connection alive and handle disconnection
 	for {
@@ -174,6 +182,30 @@ func (h *WebUIHandler) broadcastUpdates(conn *websocket.Conn, updateChan <-chan 
 
 			if err := conn.WriteJSON(msg); err != nil {
 				log.Printf("[WebUI] Failed to send state update: %v", err)
+				return
+			}
+
+		case <-done:
+			return
+		}
+	}
+}
+
+// broadcastEvents listens for event updates and sends them to the web client
+func (h *WebUIHandler) broadcastEvents(conn *websocket.Conn, eventChan <-chan *storage.Event, done <-chan struct{}) {
+	for {
+		select {
+		case event := <-eventChan:
+			msg := WebMessage{
+				Type:      "event",
+				ScooterID: event.ScooterID,
+				Event:     event.Event,
+				EventData: event.Data,
+				Timestamp: event.Timestamp.UTC().Format(time.RFC3339),
+			}
+
+			if err := conn.WriteJSON(msg); err != nil {
+				log.Printf("[WebUI] Failed to send event update: %v", err)
 				return
 			}
 

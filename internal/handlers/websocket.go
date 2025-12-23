@@ -28,17 +28,19 @@ type WebSocketHandler struct {
 	connMgr           *storage.ConnectionManager
 	responseStore     *storage.ResponseStore
 	stateStore        *storage.StateStore
+	eventStore        *storage.EventStore
 	keepaliveInterval time.Duration
 	writeMu           sync.Mutex
 }
 
 // NewWebSocketHandler creates a new WebSocket handler
-func NewWebSocketHandler(authenticator *auth.Authenticator, connMgr *storage.ConnectionManager, responseStore *storage.ResponseStore, stateStore *storage.StateStore, keepaliveInterval time.Duration) *WebSocketHandler {
+func NewWebSocketHandler(authenticator *auth.Authenticator, connMgr *storage.ConnectionManager, responseStore *storage.ResponseStore, stateStore *storage.StateStore, eventStore *storage.EventStore, keepaliveInterval time.Duration) *WebSocketHandler {
 	return &WebSocketHandler{
 		auth:              authenticator,
 		connMgr:           connMgr,
 		responseStore:     responseStore,
 		stateStore:        stateStore,
+		eventStore:        eventStore,
 		keepaliveInterval: keepaliveInterval,
 	}
 }
@@ -180,9 +182,17 @@ func (h *WebSocketHandler) messageReceiver(conn *models.Connection) {
 			}
 			conn.IncrementTelemetryReceived()
 
+			// Parse timestamp
+			timestamp, err := time.Parse(time.RFC3339, eventMsg.Timestamp)
+			if err != nil {
+				timestamp = time.Now()
+			}
+
+			// Store event
+			h.eventStore.AddEvent(conn.Identifier, eventMsg.Event, eventMsg.Data, timestamp)
+
 			eventJSON, _ := json.MarshalIndent(eventMsg.Data, "", "  ")
 			log.Printf("[WS] Received EVENT '%s' from %s:\n%s", eventMsg.Event, conn.Identifier, string(eventJSON))
-			// TODO: Store event
 
 		case protocol.MsgTypeCommandResponse:
 			var cmdResp protocol.CommandResponse
