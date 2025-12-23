@@ -50,15 +50,15 @@ type WebMessage struct {
 
 // ScooterInfo represents scooter connection information
 type ScooterInfo struct {
-	Identifier       string `json:"identifier"`
-	Name             string `json:"name,omitempty"`
-	Connected        bool   `json:"connected"`
-	Version          string `json:"version,omitempty"`
-	Uptime           int64  `json:"uptime_seconds,omitempty"`
-	BytesSent        int64  `json:"bytes_sent,omitempty"`
-	BytesReceived    int64  `json:"bytes_received,omitempty"`
-	TelemetryReceived int64 `json:"telemetry_received,omitempty"`
-	CommandsSent     int64  `json:"commands_sent,omitempty"`
+	Identifier        string `json:"identifier"`
+	Name              string `json:"name,omitempty"`
+	Connected         bool   `json:"connected"`
+	Version           string `json:"version,omitempty"`
+	Uptime            int64  `json:"uptime_seconds,omitempty"`
+	BytesSent         int64  `json:"bytes_sent,omitempty"`
+	BytesReceived     int64  `json:"bytes_received,omitempty"`
+	TelemetryReceived int64  `json:"telemetry_received,omitempty"`
+	CommandsSent      int64  `json:"commands_sent,omitempty"`
 }
 
 // HandleWebConnection handles WebSocket connections from web UI
@@ -97,13 +97,20 @@ func (h *WebUIHandler) HandleWebConnection(w http.ResponseWriter, r *http.Reques
 	// Subscribe to event updates
 	eventChan := h.eventStore.Subscribe()
 
+	// Subscribe to connection events
+	connChan := h.connMgr.Subscribe()
+
 	// Send initial state for all connected scooters
 	h.sendInitialStates(conn)
+
+	// Send initial events for all connected scooters
+	h.sendInitialEvents(conn)
 
 	// Start goroutines to listen for updates and broadcast to client
 	done := make(chan struct{})
 	go h.broadcastUpdates(conn, updateChan, done)
 	go h.broadcastEvents(conn, eventChan, done)
+	go h.broadcastConnectionEvents(conn, connChan, done)
 
 	// Keep connection alive and handle disconnection
 	for {
@@ -123,15 +130,15 @@ func (h *WebUIHandler) sendScooterList(conn *websocket.Conn) {
 
 	for _, c := range connections {
 		scooters = append(scooters, ScooterInfo{
-			Identifier:       c.Identifier,
-			Name:             c.Name,
-			Connected:        true,
-			Version:          c.Version,
-			Uptime:           int64(time.Since(c.ConnectedAt).Seconds()),
-			BytesSent:        c.BytesSent,
-			BytesReceived:    c.BytesReceived,
+			Identifier:        c.Identifier,
+			Name:              c.Name,
+			Connected:         true,
+			Version:           c.Version,
+			Uptime:            int64(time.Since(c.ConnectedAt).Seconds()),
+			BytesSent:         c.BytesSent,
+			BytesReceived:     c.BytesReceived,
 			TelemetryReceived: c.TelemetryReceived,
-			CommandsSent:     c.CommandsSent,
+			CommandsSent:      c.CommandsSent,
 		})
 	}
 
@@ -162,6 +169,28 @@ func (h *WebUIHandler) sendInitialStates(conn *websocket.Conn) {
 
 			if err := conn.WriteJSON(msg); err != nil {
 				log.Printf("[WebUI] Failed to send initial state for %s: %v", c.Identifier, err)
+			}
+		}
+	}
+}
+
+// sendInitialEvents sends stored events for all connected scooters
+func (h *WebUIHandler) sendInitialEvents(conn *websocket.Conn) {
+	connections := h.connMgr.GetAllConnections()
+
+	for _, c := range connections {
+		events := h.eventStore.GetEvents(c.Identifier, 100) // Get last 100 events
+		for _, event := range events {
+			msg := WebMessage{
+				Type:      "event",
+				ScooterID: event.ScooterID,
+				Event:     event.Event,
+				EventData: event.Data,
+				Timestamp: event.Timestamp.UTC().Format(time.RFC3339),
+			}
+
+			if err := conn.WriteJSON(msg); err != nil {
+				log.Printf("[WebUI] Failed to send initial event for %s: %v", c.Identifier, err)
 			}
 		}
 	}
@@ -207,6 +236,55 @@ func (h *WebUIHandler) broadcastEvents(conn *websocket.Conn, eventChan <-chan *s
 			if err := conn.WriteJSON(msg); err != nil {
 				log.Printf("[WebUI] Failed to send event update: %v", err)
 				return
+			}
+
+		case <-done:
+			return
+		}
+	}
+}
+
+// broadcastConnectionEvents listens for connection events and sends them to the web client
+func (h *WebUIHandler) broadcastConnectionEvents(conn *websocket.Conn, connChan <-chan storage.ConnectionEvent, done <-chan struct{}) {
+	for {
+		select {
+		case event := <-connChan:
+			if event.Type == "online" && event.Connection != nil {
+				// Scooter came online
+				scooterInfo := ScooterInfo{
+					Identifier:        event.Connection.Identifier,
+					Name:              event.Connection.Name,
+					Connected:         true,
+					Version:           event.Connection.Version,
+					Uptime:            int64(time.Since(event.Connection.ConnectedAt).Seconds()),
+					BytesSent:         event.Connection.BytesSent,
+					BytesReceived:     event.Connection.BytesReceived,
+					TelemetryReceived: event.Connection.TelemetryReceived,
+					CommandsSent:      event.Connection.CommandsSent,
+				}
+
+				msg := WebMessage{
+					Type:      "scooter_online",
+					Scooter:   &scooterInfo,
+					Timestamp: time.Now().UTC().Format(time.RFC3339),
+				}
+
+				if err := conn.WriteJSON(msg); err != nil {
+					log.Printf("[WebUI] Failed to send scooter_online: %v", err)
+					return
+				}
+			} else if event.Type == "offline" {
+				// Scooter went offline
+				msg := WebMessage{
+					Type:      "scooter_offline",
+					ScooterID: event.Identifier,
+					Timestamp: time.Now().UTC().Format(time.RFC3339),
+				}
+
+				if err := conn.WriteJSON(msg); err != nil {
+					log.Printf("[WebUI] Failed to send scooter_offline: %v", err)
+					return
+				}
 			}
 
 		case <-done:

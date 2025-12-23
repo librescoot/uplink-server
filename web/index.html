@@ -1192,6 +1192,47 @@
             }
         }
 
+        function formatEventData(eventName, data) {
+            switch (eventName) {
+                case 'battery_critical':
+                    const battery = data.battery || 'unknown';
+                    const charge = data.charge || 'unknown';
+                    return `⚠️ <strong>${battery}</strong> is critically low at <strong>${charge}%</strong>`;
+
+                case 'power_state_change':
+                    return `🔋 Power state changed from <strong>${data.from}</strong> to <strong>${data.to}</strong>`;
+
+                case 'connectivity_lost':
+                    return `📡 Internet connection lost (status: ${data.status || 'unknown'})`;
+
+                case 'connectivity_regained':
+                    return `✅ Internet connection restored (status: ${data.status || 'unknown'})`;
+
+                case 'lock_state_change':
+                    const lock = data.lock || 'unknown';
+                    const state = data.state || 'unknown';
+                    const lockIcon = lock === 'handlebar' ? '🔒' : '🔐';
+                    return `${lockIcon} ${lock} lock: <strong>${state}</strong>`;
+
+                case 'gps_fix_lost':
+                    return `📍 GPS fix lost (state: ${data.state || 'unknown'})`;
+
+                case 'gps_fix_regained':
+                    return `✅ GPS fix regained (state: ${data.state || 'unknown'})`;
+
+                case 'temperature_warning':
+                    const component = data.component || 'unknown';
+                    const temp = data.temperature || 'unknown';
+                    return `🌡️ <strong>${component}</strong> temperature is high: <strong>${temp}°C</strong>`;
+
+                default:
+                    if (data && Object.keys(data).length > 0) {
+                        return JSON.stringify(data, null, 2);
+                    }
+                    return '';
+            }
+        }
+
         function displayEvents(scooterId, events) {
             const container = document.getElementById(`events-${scooterId}`);
             const section = document.getElementById(`events-section-${scooterId}`);
@@ -1210,9 +1251,7 @@
 
             container.innerHTML = events.map((event, index) => {
                 const time = new Date(event.timestamp).toLocaleString();
-                const dataStr = event.data && Object.keys(event.data).length > 0
-                    ? JSON.stringify(event.data, null, 2)
-                    : '';
+                const formattedData = formatEventData(event.event, event.data || {});
 
                 return `
                     <div class="event-item" id="event-${scooterId}-${index}">
@@ -1221,7 +1260,7 @@
                             <span class="event-time">${time}</span>
                             <span class="event-dismiss" onclick="dismissEvent('${scooterId}', 'event-${scooterId}-${index}')">✕</span>
                         </div>
-                        ${dataStr ? `<div class="event-data">${dataStr}</div>` : ''}
+                        ${formattedData ? `<div class="event-data">${formattedData}</div>` : ''}
                     </div>
                 `;
             }).join('');
@@ -1568,8 +1607,9 @@
                         const existing = scootersData.find(s => s.identifier === newScooter.identifier);
                         if (existing) {
                             Object.assign(existing, newScooter);
-                            setScooterOnline(newScooter.identifier);
+                            existing.connected = true;
                         } else {
+                            newScooter.connected = true;
                             scootersData.push(newScooter);
                         }
                     });
@@ -1583,6 +1623,11 @@
                     });
 
                     renderScooters();
+
+                    // Set all connected scooters to online AFTER rendering
+                    newScooters.forEach(newScooter => {
+                        setScooterOnline(newScooter.identifier);
+                    });
                     break;
 
                 case 'state_update':
@@ -1621,20 +1666,25 @@
 
         function addEventToDisplay(scooterId, event) {
             const container = document.getElementById(`events-${scooterId}`);
+            const section = document.getElementById(`events-section-${scooterId}`);
+            const clearBtn = document.getElementById(`clear-events-${scooterId}`);
             if (!container) return;
 
             const time = new Date(event.timestamp).toLocaleString();
-            const dataStr = event.data && Object.keys(event.data).length > 0
-                ? JSON.stringify(event.data, null, 2)
-                : '';
+            const formattedData = formatEventData(event.event, event.data || {});
+
+            const existingEvents = container.querySelectorAll('.event-item');
+            const eventIndex = existingEvents.length;
+            const eventId = `event-${scooterId}-${eventIndex}`;
 
             const eventHtml = `
-                <div class="event-item">
+                <div class="event-item" id="${eventId}">
                     <div class="event-header">
                         <span class="event-name">${event.event}</span>
                         <span class="event-time">${time}</span>
+                        <span class="event-dismiss" onclick="dismissEvent('${scooterId}', '${eventId}')">✕</span>
                     </div>
-                    ${dataStr ? `<div class="event-data">${dataStr}</div>` : ''}
+                    ${formattedData ? `<div class="event-data">${formattedData}</div>` : ''}
                 </div>
             `;
 
@@ -1646,6 +1696,13 @@
 
             // Prepend new event (most recent first)
             container.insertAdjacentHTML('afterbegin', eventHtml);
+
+            // Show the events section
+            if (section) section.style.display = 'block';
+
+            // Update "Clear all" button visibility
+            const totalEvents = container.querySelectorAll('.event-item').length;
+            if (clearBtn) clearBtn.style.display = totalEvents > 1 ? 'inline' : 'none';
         }
 
         function setScooterOnline(scooterId) {

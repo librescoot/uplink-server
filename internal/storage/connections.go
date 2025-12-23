@@ -9,10 +9,18 @@ import (
 	"github.com/librescoot/uplink-server/internal/models"
 )
 
+// ConnectionEvent represents a connection lifecycle event
+type ConnectionEvent struct {
+	Type       string             // "online" or "offline"
+	Connection *models.Connection // For online events
+	Identifier string             // For offline events
+}
+
 // ConnectionManager manages active scooter connections
 type ConnectionManager struct {
 	mu          sync.RWMutex
 	connections map[string]*models.Connection
+	subscribers []chan<- ConnectionEvent
 
 	// Statistics
 	totalConnections   int64
@@ -27,23 +35,49 @@ type ConnectionManager struct {
 func NewConnectionManager() *ConnectionManager {
 	return &ConnectionManager{
 		connections: make(map[string]*models.Connection),
+		subscribers: make([]chan<- ConnectionEvent, 0),
+	}
+}
+
+// Subscribe adds a subscriber for connection events
+func (cm *ConnectionManager) Subscribe() <-chan ConnectionEvent {
+	ch := make(chan ConnectionEvent, 10)
+	cm.mu.Lock()
+	cm.subscribers = append(cm.subscribers, ch)
+	cm.mu.Unlock()
+	return ch
+}
+
+// broadcast sends a connection event to all subscribers
+func (cm *ConnectionManager) broadcast(event ConnectionEvent) {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+
+	for _, ch := range cm.subscribers {
+		select {
+		case ch <- event:
+		default:
+			// Skip slow subscribers
+		}
 	}
 }
 
 // AddConnection adds a new connection
 func (cm *ConnectionManager) AddConnection(conn *models.Connection) error {
 	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
-	if _, exists := cm.connections[conn.Identifier]; exists {
-		return fmt.Errorf("connection already exists for identifier: %s", conn.Identifier)
-	}
-
 	cm.connections[conn.Identifier] = conn
 	cm.totalConnections++
+	cm.mu.Unlock()
 
 	log.Printf("[ConnectionManager] Added connection for %s (total: %d)",
 		conn.Identifier, len(cm.connections))
+
+	// Broadcast connection event
+	cm.broadcast(ConnectionEvent{
+		Type:       "online",
+		Connection: conn,
+		Identifier: conn.Identifier,
+	})
 
 	return nil
 }
@@ -51,10 +85,9 @@ func (cm *ConnectionManager) AddConnection(conn *models.Connection) error {
 // RemoveConnection removes a connection
 func (cm *ConnectionManager) RemoveConnection(identifier string) {
 	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
 	conn, exists := cm.connections[identifier]
 	if !exists {
+		cm.mu.Unlock()
 		return
 	}
 
@@ -66,8 +99,16 @@ func (cm *ConnectionManager) RemoveConnection(identifier string) {
 	cm.totalCommandsSent += stats["commands_sent"].(int64)
 
 	delete(cm.connections, identifier)
+	cm.mu.Unlock()
+
 	log.Printf("[ConnectionManager] Removed connection for %s (remaining: %d)",
 		identifier, len(cm.connections))
+
+	// Broadcast disconnection event
+	cm.broadcast(ConnectionEvent{
+		Type:       "offline",
+		Identifier: identifier,
+	})
 }
 
 // GetConnection returns a connection by identifier
