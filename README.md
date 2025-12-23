@@ -4,13 +4,16 @@ Cloud-side server for librescoot uplink system. Handles bidirectional communicat
 
 ## Features
 
-- WebSocket-based persistent connections
-- Token-based authentication
-- State synchronization (full snapshots, incremental changes, events)
-- Command sending to scooters
-- Connection state tracking
-- Bandwidth and statistics monitoring
-- Configurable keepalive intervals
+- **WebSocket-based persistent connections** with compression support
+- **Token-based authentication** for scooters and web UI
+- **State synchronization** (full snapshots, incremental changes, events)
+- **Command sending** to scooters with response tracking
+- **Wire-level byte tracking** - monitors actual network bandwidth (post-compression)
+- **Real-time web UI** for monitoring and control
+- **REST API** for integration and automation
+- **Persistent storage** for state and events (survives server restarts)
+- **Connection state tracking** with detailed statistics
+- **CLI tools** for configuration and client management
 
 ## Requirements
 
@@ -30,35 +33,107 @@ make server-linux-amd64
 make server-linux-arm
 ```
 
-## Configuration
+## Quick Start
 
-Create a `config.yml` file (see `configs/config.example.yml`):
+### Initialize Configuration
 
-```yaml
-server:
-  ws_port: 8080
-  lp_port: 8081
-  sse_port: 8082
-  keepalive_interval: "5m"
-  lp_timeout: "24h"
+Generate a secure initial configuration with API key:
 
-auth:
-  tokens:
-    "mdb-12345678": "secret-token-here"
-
-storage:
-  type: "memory"
-
-logging:
-  level: "info"
-  stats_interval: "30s"
+```bash
+./bin/uplink-server init -config config.yml
 ```
 
-## Running
+### Add Scooter Client
+
+Generate authentication credentials for a new scooter:
+
+```bash
+./bin/uplink-server add-client -config config.yml -identifier WUNU2S3B7MZ000147
+```
+
+This outputs a client configuration block to add to your scooter's config.
+
+### Start Server
 
 ```bash
 ./bin/uplink-server -config config.yml
 ```
+
+Access web UI at `http://localhost:8080` (use the API key from config.yml)
+
+## Configuration
+
+See `configs/config.example.yml` for full configuration reference.
+
+**Key configuration sections:**
+- `server.ws_port`: WebSocket port for scooter and web UI connections (default: 8080)
+- `server.keepalive_interval`: Keepalive interval (e.g., "5m")
+- `auth.api_key`: API key for web UI and REST API access
+- `auth.tokens`: Map of scooter identifiers to authentication tokens
+- `storage.data_dir`: Directory for persistent state/event storage (default: "./data")
+- `logging.stats_interval`: Statistics logging frequency (e.g., "30s")
+
+## Web UI
+
+The server includes a real-time web interface for monitoring and controlling scooters.
+
+**Features:**
+- Real-time scooter status and state updates
+- Connection statistics with wire-level bandwidth tracking
+- Command execution (lock/unlock, open seatbox, hibernate, etc.)
+- Event log with dismissal
+- Compression ratio display showing bandwidth savings
+
+Access at `http://localhost:8080` (authenticate with API key from config)
+
+## REST API
+
+All endpoints require authentication via `X-API-Key` header.
+
+### Endpoints
+
+**List scooters:**
+```bash
+GET /api/scooters
+```
+
+**Get scooter details:**
+```bash
+GET /api/scooters/{identifier}
+GET /api/scooters/{identifier}/state
+GET /api/scooters/{identifier}/events
+```
+
+**Send command:**
+```bash
+POST /api/commands
+Content-Type: application/json
+
+{
+  "scooter_id": "WUNU2S3B7MZ000147",
+  "command": "lock",
+  "params": {}
+}
+```
+
+**Get command result:**
+```bash
+GET /api/commands/{request_id}
+```
+
+## Monitoring
+
+### Connection Statistics
+
+The server tracks both application-level and wire-level statistics:
+
+- **Application bytes**: Uncompressed message data
+- **Wire bytes**: Actual network bandwidth (post-compression)
+- **Compression ratio**: Bandwidth savings from WebSocket compression
+- **Telemetry count**: State/change/event messages received
+- **Command count**: Commands sent to scooter
+
+Wire-level tracking uses TCP connection wrappers to count actual bytes transmitted over the network, providing accurate bandwidth usage metrics.
 
 ## Protocol
 
@@ -126,6 +201,35 @@ logging:
 - Easier querying - access all battery or vehicle data directly
 - Cleaner data model matching logical system organization
 
+## Client Implementation
+
+To connect a scooter to the uplink server:
+
+1. **Establish WebSocket connection** to `ws://server:8080/ws`
+2. **Send authentication message** with identifier and token:
+   ```json
+   {
+     "type": "auth",
+     "identifier": "WUNU2S3B7MZ000147",
+     "token": "your-secret-token",
+     "version": "v1.0.0",
+     "protocol_version": 1
+   }
+   ```
+3. **Wait for auth response** (`status: "success"`)
+4. **Send initial state snapshot** with all current values
+5. **Send change messages** as state updates occur
+6. **Send event messages** for critical notifications
+7. **Handle incoming commands** and send command responses
+8. **Respond to keepalive pings** to maintain connection
+
+**WebSocket compression:**
+Enable per-message deflate compression for bandwidth savings (typically 20-40% reduction).
+
+**Example clients:**
+- librescoot vehicle-service: Reference implementation in Go
+- See protocol examples above for message formats
+
 ## Architecture
 
 ```
@@ -163,4 +267,4 @@ uplink-server/
 
 ## License
 
-AGPL-3.0 (matches librescoot project)
+[AGPL-3.0](LICENSE)
