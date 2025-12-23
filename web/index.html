@@ -269,17 +269,52 @@
         .event-header {
             display: flex;
             justify-content: space-between;
+            align-items: center;
             margin-bottom: 4px;
         }
 
         .event-name {
             font-weight: 600;
             color: #2c3e50;
+            flex: 1;
         }
 
         .event-time {
             color: #7f8c8d;
             font-size: 12px;
+            margin-right: 8px;
+        }
+
+        .event-dismiss {
+            cursor: pointer;
+            color: #95a5a6;
+            font-weight: bold;
+            padding: 0 4px;
+            font-size: 16px;
+            line-height: 1;
+            user-select: none;
+        }
+
+        .event-dismiss:hover {
+            color: #e74c3c;
+        }
+
+        .events-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .clear-events {
+            color: #3498db;
+            font-size: 12px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .clear-events:hover {
+            text-decoration: underline;
         }
 
         .event-data {
@@ -1081,11 +1116,12 @@
                         <div id="response-${scooter.identifier}" class="command-response hidden" onclick="this.classList.add('hidden')" title="Click to dismiss"></div>
                     </div>
 
-                    <div class="events-section" id="events-section-${scooter.identifier}">
-                        <h3>Events</h3>
-                        <div id="events-${scooter.identifier}">
-                            <p style="color: #7f8c8d; font-size: 13px;">No events yet</p>
+                    <div class="events-section" id="events-section-${scooter.identifier}" style="display: none;">
+                        <div class="events-header">
+                            <h3 style="margin: 0;">Events</h3>
+                            <a class="clear-events" id="clear-events-${scooter.identifier}" onclick="clearAllEvents('${scooter.identifier}')" style="display: none;">Clear all</a>
                         </div>
+                        <div id="events-${scooter.identifier}"></div>
                     </div>
 
                     <div class="state-section" id="state-${scooter.identifier}">
@@ -1158,29 +1194,64 @@
 
         function displayEvents(scooterId, events) {
             const container = document.getElementById(`events-${scooterId}`);
+            const section = document.getElementById(`events-section-${scooterId}`);
+            const clearBtn = document.getElementById(`clear-events-${scooterId}`);
             if (!container) return;
 
             if (events.length === 0) {
                 container.innerHTML = '<p style="color: #7f8c8d; font-size: 13px;">No events yet</p>';
+                if (section) section.style.display = 'none';
+                if (clearBtn) clearBtn.style.display = 'none';
                 return;
             }
 
-            container.innerHTML = events.map(event => {
+            if (section) section.style.display = 'block';
+            if (clearBtn) clearBtn.style.display = events.length > 1 ? 'inline' : 'none';
+
+            container.innerHTML = events.map((event, index) => {
                 const time = new Date(event.timestamp).toLocaleString();
                 const dataStr = event.data && Object.keys(event.data).length > 0
                     ? JSON.stringify(event.data, null, 2)
                     : '';
 
                 return `
-                    <div class="event-item">
+                    <div class="event-item" id="event-${scooterId}-${index}">
                         <div class="event-header">
                             <span class="event-name">${event.event}</span>
                             <span class="event-time">${time}</span>
+                            <span class="event-dismiss" onclick="dismissEvent('${scooterId}', 'event-${scooterId}-${index}')">✕</span>
                         </div>
                         ${dataStr ? `<div class="event-data">${dataStr}</div>` : ''}
                     </div>
                 `;
             }).join('');
+        }
+
+        function dismissEvent(scooterId, eventId) {
+            const eventEl = document.getElementById(eventId);
+            if (eventEl) eventEl.remove();
+
+            const container = document.getElementById(`events-${scooterId}`);
+            const remainingEvents = container.querySelectorAll('.event-item');
+
+            if (remainingEvents.length === 0) {
+                container.innerHTML = '<p style="color: #7f8c8d; font-size: 13px;">No events yet</p>';
+                const section = document.getElementById(`events-section-${scooterId}`);
+                if (section) section.style.display = 'none';
+            } else {
+                const clearBtn = document.getElementById(`clear-events-${scooterId}`);
+                if (clearBtn) clearBtn.style.display = remainingEvents.length > 1 ? 'inline' : 'none';
+            }
+        }
+
+        function clearAllEvents(scooterId) {
+            const container = document.getElementById(`events-${scooterId}`);
+            const section = document.getElementById(`events-section-${scooterId}`);
+            const clearBtn = document.getElementById(`clear-events-${scooterId}`);
+
+            container.innerHTML = '<p style="color: #7f8c8d; font-size: 13px;">No events yet</p>';
+            if (section) section.style.display = 'none';
+            if (clearBtn) clearBtn.style.display = 'none';
         }
 
         function updateScooterConnectionStats(scooterId, data) {
