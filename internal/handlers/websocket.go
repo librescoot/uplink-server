@@ -107,6 +107,9 @@ func (h *WebSocketHandler) HandleConnection(w http.ResponseWriter, r *http.Reque
 	// Mark as authenticated
 	h.connMgr.MarkAuthenticated(authMsg.Identifier)
 
+	// Update version in state store for persistence
+	h.stateStore.SetVersion(authMsg.Identifier, authMsg.Version)
+
 	// Send auth response
 	h.sendAuthResponse(conn, "success", "")
 

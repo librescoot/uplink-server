@@ -13,6 +13,7 @@ import (
 type ScooterState struct {
 	ScooterID    string
 	State        map[string]any // Full state snapshot
+	Version      string         // Client version
 	LastUpdated  time.Time
 	LastChangeAt time.Time
 }
@@ -164,6 +165,7 @@ func (ss *StateStore) GetState(scooterID string) (*ScooterState, bool) {
 	stateCopy := &ScooterState{
 		ScooterID:    state.ScooterID,
 		State:        make(map[string]any),
+		Version:      state.Version,
 		LastUpdated:  state.LastUpdated,
 		LastChangeAt: state.LastChangeAt,
 	}
@@ -173,6 +175,42 @@ func (ss *StateStore) GetState(scooterID string) (*ScooterState, bool) {
 	}
 
 	return stateCopy, true
+}
+
+// GetAllStates retrieves all scooter states
+func (ss *StateStore) GetAllStates() map[string]*ScooterState {
+	ss.mu.RLock()
+	defer ss.mu.RUnlock()
+
+	// Return a copy of the states map
+	statesCopy := make(map[string]*ScooterState, len(ss.states))
+	for id, state := range ss.states {
+		statesCopy[id] = state
+	}
+
+	return statesCopy
+}
+
+// SetVersion updates the version for a scooter
+func (ss *StateStore) SetVersion(scooterID, version string) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	state, exists := ss.states[scooterID]
+	if !exists {
+		// Create new state entry if it doesn't exist
+		state = &ScooterState{
+			ScooterID: scooterID,
+			State:     make(map[string]any),
+		}
+		ss.states[scooterID] = state
+	}
+
+	state.Version = version
+	state.LastUpdated = time.Now()
+
+	// Persist to disk (outside lock to avoid holding it too long)
+	go ss.saveToFile()
 }
 
 // RemoveState removes a scooter's state (e.g., when disconnected)

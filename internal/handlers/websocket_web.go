@@ -21,15 +21,22 @@ type WebUIHandler struct {
 	stateStore *storage.StateStore
 	eventStore *storage.EventStore
 	connMgr    *storage.ConnectionManager
+	auth       Authenticator
 	apiKey     string
 }
 
+// Authenticator interface for getting scooter names
+type Authenticator interface {
+	GetName(identifier string) string
+}
+
 // NewWebUIHandler creates a new web UI WebSocket handler
-func NewWebUIHandler(stateStore *storage.StateStore, eventStore *storage.EventStore, connMgr *storage.ConnectionManager, apiKey string) *WebUIHandler {
+func NewWebUIHandler(stateStore *storage.StateStore, eventStore *storage.EventStore, connMgr *storage.ConnectionManager, auth Authenticator, apiKey string) *WebUIHandler {
 	return &WebUIHandler{
 		stateStore: stateStore,
 		eventStore: eventStore,
 		connMgr:    connMgr,
+		auth:       auth,
 		apiKey:     apiKey,
 	}
 }
@@ -47,6 +54,11 @@ type WebMessage struct {
 	EventData  map[string]any `json:"event_data,omitempty"`
 	Error      string         `json:"error,omitempty"`
 	Timestamp  string         `json:"timestamp,omitempty"`
+	// Connection stats (included with state updates for connected scooters)
+	BytesSent         *int64 `json:"bytes_sent,omitempty"`
+	BytesReceived     *int64 `json:"bytes_received,omitempty"`
+	TelemetryReceived *int64 `json:"telemetry_received,omitempty"`
+	CommandsSent      *int64 `json:"commands_sent,omitempty"`
 }
 
 // ScooterInfo represents scooter connection information
@@ -124,13 +136,14 @@ func (h *WebUIHandler) HandleWebConnection(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// sendScooterList sends the list of connected scooters to the client
+// sendScooterList sends the list of all scooters (connected and disconnected with state)
 func (h *WebUIHandler) sendScooterList(conn *websocket.Conn) {
 	connections := h.connMgr.GetAllConnections()
-	scooters := make([]ScooterInfo, 0, len(connections))
+	scooterMap := make(map[string]ScooterInfo)
 
+	// Add all currently connected scooters
 	for _, c := range connections {
-		scooters = append(scooters, ScooterInfo{
+		scooterMap[c.Identifier] = ScooterInfo{
 			Identifier:        c.Identifier,
 			Name:              c.Name,
 			Connected:         true,
@@ -140,7 +153,27 @@ func (h *WebUIHandler) sendScooterList(conn *websocket.Conn) {
 			BytesReceived:     c.BytesReceived,
 			TelemetryReceived: c.TelemetryReceived,
 			CommandsSent:      c.CommandsSent,
-		})
+		}
+	}
+
+	// Add scooters with persisted state that aren't currently connected
+	allStates := h.stateStore.GetAllStates()
+	for scooterID, state := range allStates {
+		if _, exists := scooterMap[scooterID]; !exists {
+			// Scooter has state but is not connected
+			scooterMap[scooterID] = ScooterInfo{
+				Identifier: scooterID,
+				Name:       h.auth.GetName(scooterID),
+				Version:    state.Version,
+				Connected:  false,
+			}
+		}
+	}
+
+	// Convert map to slice
+	scooters := make([]ScooterInfo, 0, len(scooterMap))
+	for _, info := range scooterMap {
+		scooters = append(scooters, info)
 	}
 
 	msg := WebMessage{
@@ -154,33 +187,30 @@ func (h *WebUIHandler) sendScooterList(conn *websocket.Conn) {
 	}
 }
 
-// sendInitialStates sends the current state for all connected scooters
+// sendInitialStates sends the current state for all scooters with persisted state
 func (h *WebUIHandler) sendInitialStates(conn *websocket.Conn) {
-	connections := h.connMgr.GetAllConnections()
+	allStates := h.stateStore.GetAllStates()
 
-	for _, c := range connections {
-		if state, ok := h.stateStore.GetState(c.Identifier); ok {
-			msg := WebMessage{
-				Type:       "state_update",
-				ScooterID:  c.Identifier,
-				State:      state.State,
-				UpdateType: "full",
-				Timestamp:  time.Now().UTC().Format(time.RFC3339),
-			}
+	for scooterID, state := range allStates {
+		msg := WebMessage{
+			Type:       "state_update",
+			ScooterID:  scooterID,
+			State:      state.State,
+			UpdateType: "full",
+			Timestamp:  time.Now().UTC().Format(time.RFC3339),
+		}
 
-			if err := conn.WriteJSON(msg); err != nil {
-				log.Printf("[WebUI] Failed to send initial state for %s: %v", c.Identifier, err)
-			}
+		if err := conn.WriteJSON(msg); err != nil {
+			log.Printf("[WebUI] Failed to send initial state for %s: %v", scooterID, err)
 		}
 	}
 }
 
-// sendInitialEvents sends stored events for all connected scooters
+// sendInitialEvents sends stored events for all scooters with events
 func (h *WebUIHandler) sendInitialEvents(conn *websocket.Conn) {
-	connections := h.connMgr.GetAllConnections()
+	allEvents := h.eventStore.GetAllEvents()
 
-	for _, c := range connections {
-		events := h.eventStore.GetEvents(c.Identifier, 100) // Get last 100 events
+	for scooterID, events := range allEvents {
 		// Reverse events so oldest is sent first, then prepending in UI reverses back to newest-first
 		for i := len(events) - 1; i >= 0; i-- {
 			event := events[i]
@@ -194,7 +224,7 @@ func (h *WebUIHandler) sendInitialEvents(conn *websocket.Conn) {
 			}
 
 			if err := conn.WriteJSON(msg); err != nil {
-				log.Printf("[WebUI] Failed to send initial event for %s: %v", c.Identifier, err)
+				log.Printf("[WebUI] Failed to send initial event for %s: %v", scooterID, err)
 			}
 		}
 	}
@@ -211,6 +241,14 @@ func (h *WebUIHandler) broadcastUpdates(conn *websocket.Conn, updateChan <-chan 
 				State:      update.State,
 				UpdateType: update.Type,
 				Timestamp:  update.Timestamp.UTC().Format(time.RFC3339),
+			}
+
+			// Include connection stats if scooter is connected
+			if c, exists := h.connMgr.GetConnection(update.ScooterID); exists {
+				msg.BytesSent = &c.BytesSent
+				msg.BytesReceived = &c.BytesReceived
+				msg.TelemetryReceived = &c.TelemetryReceived
+				msg.CommandsSent = &c.CommandsSent
 			}
 
 			if err := conn.WriteJSON(msg); err != nil {

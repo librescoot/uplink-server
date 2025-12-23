@@ -377,7 +377,7 @@
 
         .status-dot.online {
             background: #28a745;
-            animation: pulse 2s infinite;
+            animation: pulse 4s infinite;
         }
 
         .status-dot.offline {
@@ -385,19 +385,15 @@
         }
 
         .scooter-card.offline {
-            opacity: 0.6;
             background: #f5f5f5;
         }
 
-        .scooter-card.offline .scooter-id,
-        .scooter-card.offline .scooter-identifier,
         .scooter-card.offline .state-badge,
-        .scooter-card.offline .connection-status {
-            color: #95a5a6;
-        }
-
-        .scooter-card.offline .status-indicator {
-            color: #dc3545;
+        .scooter-card.offline .connection-status,
+        .scooter-card.offline .state-section,
+        .scooter-card.offline .events-section,
+        .scooter-card.offline .commands-section {
+            opacity: 0.6;
         }
 
         @keyframes pulse {
@@ -1141,7 +1137,7 @@
             }
 
             if (scootersData.length === 0) {
-                container.innerHTML = '<div class="empty-state"><h3>No scooters connected</h3><p>Connect a scooter via WebSocket to see it here</p></div>';
+                container.innerHTML = '<div class="empty-state"><h3>No scooters</h3><p>Waiting for scooter connections.<br>Use <code>uplink-server add-client</code> to generate a client config.</p></div>';
                 return;
             }
 
@@ -1642,31 +1638,48 @@
                         const existing = scootersData.find(s => s.identifier === newScooter.identifier);
                         if (existing) {
                             Object.assign(existing, newScooter);
-                            existing.connected = true;
                         } else {
-                            newScooter.connected = true;
                             scootersData.push(newScooter);
                         }
                     });
 
-                    // Scooters not in the new list are now offline
-                    scootersData.forEach(scooter => {
-                        if (!newIds.has(scooter.identifier)) {
-                            scooter.connected = false;
-                            setScooterOffline(scooter.identifier);
-                        }
-                    });
+                    // Scooters not in the new list are removed
+                    scootersData = scootersData.filter(s => newIds.has(s.identifier));
 
                     renderScooters();
 
-                    // Set all connected scooters to online AFTER rendering
+                    // Set connection status based on server data AFTER rendering
                     newScooters.forEach(newScooter => {
-                        setScooterOnline(newScooter.identifier);
+                        if (newScooter.connected) {
+                            setScooterOnline(newScooter.identifier);
+                        } else {
+                            setScooterOffline(newScooter.identifier);
+                        }
                     });
                     break;
 
                 case 'state_update':
                     updateScooterStateInPlace(msg.scooter_id, msg.state, msg.update_type);
+
+                    // Update connection stats for active scooter
+                    const scooterData = scootersData.find(s => s.identifier === msg.scooter_id);
+                    if (scooterData && scooterData.connected) {
+                        // Update uptime (calculate from connected_at if available)
+                        if (scooterData.connected_at) {
+                            const connectedAt = new Date(scooterData.connected_at);
+                            scooterData.uptime_seconds = Math.floor((Date.now() - connectedAt.getTime()) / 1000);
+                        } else {
+                            scooterData.uptime_seconds = (scooterData.uptime_seconds || 0) + 1;
+                        }
+
+                        // Update stats from server if included
+                        if (msg.bytes_sent !== undefined) scooterData.bytes_sent = msg.bytes_sent;
+                        if (msg.bytes_received !== undefined) scooterData.bytes_received = msg.bytes_received;
+                        if (msg.telemetry_received !== undefined) scooterData.telemetry_received = msg.telemetry_received;
+                        if (msg.commands_sent !== undefined) scooterData.commands_sent = msg.commands_sent;
+
+                        updateScooterConnectionStats(msg.scooter_id, scooterData);
+                    }
                     break;
 
                 case 'scooter_online':
@@ -1674,9 +1687,11 @@
                     if (existing) {
                         Object.assign(existing, msg.scooter);
                         setScooterOnline(msg.scooter.identifier);
+                        updateScooterConnectionStats(msg.scooter.identifier, msg.scooter);
                     } else {
                         scootersData.push(msg.scooter);
                         renderScooters();
+                        setScooterOnline(msg.scooter.identifier);
                     }
                     break;
 
