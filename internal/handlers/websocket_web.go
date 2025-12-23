@@ -47,6 +47,7 @@ type WebMessage struct {
 // ScooterInfo represents scooter connection information
 type ScooterInfo struct {
 	Identifier       string `json:"identifier"`
+	Name             string `json:"name,omitempty"`
 	Connected        bool   `json:"connected"`
 	Version          string `json:"version,omitempty"`
 	Uptime           int64  `json:"uptime_seconds,omitempty"`
@@ -115,6 +116,7 @@ func (h *WebUIHandler) sendScooterList(conn *websocket.Conn) {
 	for _, c := range connections {
 		scooters = append(scooters, ScooterInfo{
 			Identifier:       c.Identifier,
+			Name:             c.Name,
 			Connected:        true,
 			Version:          c.Version,
 			Uptime:           int64(time.Since(c.ConnectedAt).Seconds()),

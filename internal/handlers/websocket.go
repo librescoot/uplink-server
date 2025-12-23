@@ -92,6 +92,7 @@ func (h *WebSocketHandler) HandleConnection(w http.ResponseWriter, r *http.Reque
 	connection := models.NewConnection(authMsg.Identifier, conn)
 	connection.Version = authMsg.Version
 	connection.Authenticated = true
+	connection.Name = h.auth.GetName(authMsg.Identifier)
 
 	// Add to connection manager
 	if err := h.connMgr.AddConnection(connection); err != nil {

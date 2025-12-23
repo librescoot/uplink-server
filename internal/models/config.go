@@ -20,10 +20,16 @@ type ServerConfig struct {
 	LPTimeout         string `yaml:"lp_timeout"`
 }
 
+// ScooterConfig contains scooter-specific settings
+type ScooterConfig struct {
+	Token string `yaml:"token"`
+	Name  string `yaml:"name,omitempty"`
+}
+
 // AuthConfig contains authentication settings
 type AuthConfig struct {
-	APIKey string            `yaml:"api_key"`
-	Tokens map[string]string `yaml:"tokens"`
+	APIKey string                   `yaml:"api_key"`
+	Tokens map[string]ScooterConfig `yaml:"tokens"`
 }
 
 // StorageConfig contains storage settings

@@ -254,9 +254,15 @@
         }
 
         .scooter-id {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 600;
             color: #2c3e50;
+        }
+
+        .scooter-identifier {
+            font-size: 11px;
+            color: #7f8c8d;
+            margin-bottom: 2px;
         }
 
         .state-badge {
@@ -293,6 +299,22 @@
 
         .status-dot.offline {
             background: #dc3545;
+        }
+
+        .scooter-card.offline {
+            opacity: 0.6;
+            background: #f5f5f5;
+        }
+
+        .scooter-card.offline .scooter-id,
+        .scooter-card.offline .scooter-identifier,
+        .scooter-card.offline .state-badge,
+        .scooter-card.offline .connection-status {
+            color: #95a5a6;
+        }
+
+        .scooter-card.offline .status-indicator {
+            color: #dc3545;
         }
 
         @keyframes pulse {
@@ -360,7 +382,7 @@
         }
 
         details {
-            padding: 15px;
+            padding: 10px;
             background: #f8f9fa;
             border-radius: 6px;
             border: 1px solid #e9ecef;
@@ -482,17 +504,170 @@
         }
 
         .command-btn {
-            padding: 8px 16px;
+            padding: 4px 8px;
             font-size: 13px;
-            background: #3498db;
+            line-height: 1.5;
+            background: #95a5a6;
         }
 
-        .command-btn.danger {
+        .command-btn.unlock {
+            background: #27ae60;
+        }
+
+        .command-btn.unlock:hover {
+            background: #229954;
+        }
+
+        .command-btn.lock {
             background: #e74c3c;
         }
 
-        .command-btn.danger:hover {
+        .command-btn.lock:hover {
             background: #c0392b;
+        }
+
+        .command-btn.open {
+            background: #3498db;
+        }
+
+        .command-btn.open:hover {
+            background: #2980b9;
+        }
+
+        .command-btn.hibernate {
+            background: #5b69bc;
+        }
+
+        .command-btn.hibernate:hover {
+            background: #4a5a9d;
+        }
+
+        .command-btn.blinker {
+            background: #e67e22;
+        }
+
+        .command-btn.blinker:hover {
+            background: #d35400;
+        }
+
+        .command-btn.honk {
+            background: #e74c3c;
+        }
+
+        .command-btn.honk:hover {
+            background: #c0392b;
+        }
+
+        .command-buttons-wrapper {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .advanced-commands-toggle {
+            font-size: 13px;
+            background: #95a5a6;
+            padding: 4px 8px;
+            line-height: 1.5;
+        }
+
+        .advanced-commands-toggle:hover {
+            background: #7f8c8d;
+        }
+
+        .advanced-commands-dropdown {
+            display: none;
+            flex-basis: 100%;
+            width: 100%;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .advanced-commands-dropdown.open {
+            display: flex;
+        }
+
+        .advanced-commands-toggle.open {
+            transform: rotate(180deg);
+        }
+
+        .advanced-commands-dropdown .command-btn {
+            flex: 0 0 auto;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 2px;
+        }
+
+        .split-button {
+            display: inline-flex;
+            position: relative;
+        }
+
+        .split-button .split-main {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .split-button.lock .split-toggle {
+            cursor: pointer;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            font-size: 13px;
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+            border-top-right-radius: 4px;
+            border-bottom-right-radius: 4px;
+            border-left: 1px solid rgba(255,255,255,0.3);
+            filter: brightness(0.9);
+        }
+
+        .split-button.unlock .split-toggle {
+            cursor: pointer;
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            font-size: 13px;
+            border-top-left-radius: 0;
+            border-bottom-left-radius: 0;
+            border-top-right-radius: 4px;
+            border-bottom-right-radius: 4px;
+            border-left: 1px solid rgba(255,255,255,0.3);
+            filter: brightness(0.9);
+        }
+
+        .split-button .split-toggle:hover {
+            filter: brightness(0.8);
+        }
+
+        .split-button .split-menu {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 2px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            z-index: 1000;
+            min-width: 100%;
+        }
+
+        .split-button .split-menu.open {
+            display: block;
+        }
+
+        .split-button .split-menu .command-btn {
+            width: 100%;
+            text-align: left;
+            border-radius: 4px;
         }
 
         .command-response {
@@ -501,7 +676,32 @@
             background: #f8f9fa;
             border-radius: 4px;
             font-size: 13px;
-            font-family: 'Courier New', monospace;
+            font-family: ui-monospace, 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Menlo, Consolas, monospace;
+            cursor: pointer;
+            transition: background 0.2s;
+            white-space: pre-wrap;
+        }
+
+        .command-response:hover {
+            background: #e9ecef;
+        }
+
+        .command-response .spinner {
+            display: inline-block;
+            animation: pulse-color 1s ease-in-out infinite;
+        }
+
+        .command-response .success {
+            color: #28a745;
+        }
+
+        .command-response .error {
+            color: #dc3545;
+        }
+
+        @keyframes pulse-color {
+            0%, 100% { color: #2c3e50; }
+            50% { color: #bdc3c7; }
         }
 
         .empty-state {
@@ -771,7 +971,8 @@
                     <div class="scooter-header">
                         <div class="scooter-title">
                             <div>
-                                <div class="scooter-id">${scooter.identifier}</div>
+                                ${scooter.name ? `<div class="scooter-identifier">${scooter.identifier}</div>` : ''}
+                                <div class="scooter-id">${scooter.name || scooter.identifier}</div>
                                 <div class="state-badge" id="badge-${scooter.identifier}"></div>
                             </div>
                             <div class="status-indicator">
@@ -780,18 +981,56 @@
                             </div>
                         </div>
                         <div class="connection-status" id="connection-${scooter.identifier}">
-                            ${scooter.version || 'Unknown'} · ${formatDuration(scooter.uptime_seconds)} · ↑${formatBytes(scooter.bytes_sent || 0)} ↓${formatBytes(scooter.bytes_received || 0)} · Tel:${scooter.telemetry_received || 0} Cmd:${scooter.commands_sent || 0}
+                            ${scooter.version || 'Unknown'} · ${formatDuration(scooter.uptime_seconds)} · ↑${formatBytes(scooter.bytes_received || 0)} ↓${formatBytes(scooter.bytes_sent || 0)} · Tel:${scooter.telemetry_received || 0} Cmd:${scooter.commands_sent || 0}
                         </div>
                     </div>
 
                     <div class="commands-section">
-                        <div class="command-buttons">
-                            <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'lock')">Lock</button>
-                            <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'unlock')">Unlock</button>
-                            <button class="command-btn" onclick="if(confirm('Put scooter into hibernate mode?')) sendCommand('${scooter.identifier}', 'hibernate')">Hibernate</button>
-                            <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'get_state')" title="Refresh state"><svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M480-160q-133 0-226.5-93.5T160-480q0-133 93.5-226.5T480-800q85 0 149 34.5T740-671v-129h60v254H546v-60h168q-38-60-97-97t-137-37q-109 0-184.5 75.5T220-480q0 109 75.5 184.5T480-220q83 0 152-47.5T728-393h62q-29 105-115 169t-195 64Z"/></svg></button>
+                        <div class="command-buttons-wrapper">
+                            <div class="split-button lock" id="lock-btn-${scooter.identifier}">
+                                <button class="command-btn split-main lock" onclick="sendCommand('${scooter.identifier}', 'lock')">Lock</button>
+                                <button class="split-toggle" onclick="toggleSplitDropdown('${scooter.identifier}')">▼</button>
+                                <div class="split-menu" id="split-menu-${scooter.identifier}">
+                                    <button class="command-btn unlock" onclick="sendCommand('${scooter.identifier}', 'unlock')">Unlock</button>
+                                </div>
+                            </div>
+                            <button class="command-btn open" onclick="sendCommand('${scooter.identifier}', 'open_seatbox')">Open</button>
+                            <button class="command-btn hibernate" onclick="if(confirm('Put scooter into hibernate mode?')) sendCommand('${scooter.identifier}', 'hibernate')">Hibernate</button>
+                            <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'get_state')" title="Refresh state"><svg width="14" height="14" viewBox="0 -960 960 960" fill="currentColor"><path d="M480-160q-133 0-226.5-93.5T160-480q0-133 93.5-226.5T480-800q85 0 149 34.5T740-671v-129h60v254H546v-60h168q-38-60-97-97t-137-37q-109 0-184.5 75.5T220-480q0 109 75.5 184.5T480-220q83 0 152-47.5T728-393h62q-29 105-115 169t-195 64Z"/></svg></button>
+                            <button class="advanced-commands-toggle" onclick="toggleAdvancedCommands('${scooter.identifier}')">▼</button>
+                            <div class="advanced-commands-dropdown" id="advanced-commands-${scooter.identifier}">
+                                    <div class="button-group">
+                                        <button class="command-btn lock" onclick="sendCommand('${scooter.identifier}', 'lock_hibernate')">Lock + Hibernate</button>
+                                        <button class="command-btn lock" onclick="sendCommand('${scooter.identifier}', 'force_lock')">Force Lock</button>
+                                    </div>
+                                    <button class="command-btn honk" onclick="sendCommandWithParams('${scooter.identifier}', 'honk', {duration_ms: 500})">Honk (500ms)</button>
+                                    <div class="button-group">
+                                        <button class="command-btn blinker" onclick="sendCommand('${scooter.identifier}', 'blinker_left')">Blinker ←</button>
+                                        <button class="command-btn blinker" onclick="sendCommand('${scooter.identifier}', 'blinker_right')">Blinker →</button>
+                                        <button class="command-btn blinker" onclick="sendCommand('${scooter.identifier}', 'blinker_both')">Blinker ⚠</button>
+                                        <button class="command-btn blinker" onclick="sendCommand('${scooter.identifier}', 'blinker_off')">Blinker Off</button>
+                                    </div>
+                                    <div class="button-group">
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'dashboard_on')">Dashboard On</button>
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'dashboard_off')">Dashboard Off</button>
+                                    </div>
+                                    <div class="button-group">
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'engine_on')">Engine On</button>
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'engine_off')">Engine Off</button>
+                                    </div>
+                                    <div class="button-group">
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'handlebar_lock')">Handlebar Lock</button>
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'handlebar_unlock')">Handlebar Unlock</button>
+                                    </div>
+                                    <div class="button-group">
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'reboot')">Reboot</button>
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'hibernate_manual')">Hibernate Manual</button>
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'ping')">Ping</button>
+                                    </div>
+                            </div>
                         </div>
-                        <div id="response-${scooter.identifier}" class="command-response hidden"></div>
+
+                        <div id="response-${scooter.identifier}" class="command-response hidden" onclick="this.classList.add('hidden')" title="Click to dismiss"></div>
                     </div>
 
                     <div class="state-section" id="state-${scooter.identifier}">
@@ -915,11 +1154,60 @@
             badge.innerHTML = badgeItems.join('');
         }
 
+        function toggleSplitDropdown(scooterId) {
+            const menu = document.getElementById(`split-menu-${scooterId}`);
+            if (menu) {
+                menu.classList.toggle('open');
+            }
+        }
+
+        function toggleAdvancedCommands(scooterId) {
+            const dropdown = document.getElementById(`advanced-commands-${scooterId}`);
+            const button = event.target;
+            if (dropdown) {
+                dropdown.classList.toggle('open');
+                button.classList.toggle('open');
+            }
+        }
+
+        function updateLockButton(scooterId, state) {
+            const lockBtn = document.getElementById(`lock-btn-${scooterId}`);
+            if (!lockBtn) return;
+
+            const vehicleState = state.vehicle?.state || '';
+            const shouldLockByDefault = vehicleState === 'parked' || vehicleState === 'ready-to-drive';
+
+            if (shouldLockByDefault) {
+                // Primary: Lock, Dropdown: Unlock
+                lockBtn.className = 'split-button lock';
+                lockBtn.innerHTML = `
+                    <button class="command-btn split-main lock" onclick="sendCommand('${scooterId}', 'lock')">Lock</button>
+                    <button class="split-toggle" onclick="toggleSplitDropdown('${scooterId}')">▼</button>
+                    <div class="split-menu" id="split-menu-${scooterId}">
+                        <button class="command-btn unlock" onclick="sendCommand('${scooterId}', 'unlock')">Unlock</button>
+                    </div>
+                `;
+            } else {
+                // Primary: Unlock, Dropdown: Lock
+                lockBtn.className = 'split-button unlock';
+                lockBtn.innerHTML = `
+                    <button class="command-btn split-main unlock" onclick="sendCommand('${scooterId}', 'unlock')">Unlock</button>
+                    <button class="split-toggle" onclick="toggleSplitDropdown('${scooterId}')">▼</button>
+                    <div class="split-menu" id="split-menu-${scooterId}">
+                        <button class="command-btn lock" onclick="sendCommand('${scooterId}', 'lock')">Lock</button>
+                    </div>
+                `;
+            }
+        }
+
         function updateScooterState(scooterId, stateData, deltaChanges = null) {
             const stateContainer = document.getElementById(`state-${scooterId}`);
             if (!stateContainer) return;
 
             const state = stateData.state || {};
+
+            // Update lock button based on vehicle state
+            updateLockButton(scooterId, state);
 
             // Remove loading text if present
             const loadingText = stateContainer.querySelector('p');
@@ -974,9 +1262,14 @@
         }
 
         async function sendCommand(scooterId, command) {
+            return sendCommandWithParams(scooterId, command, {});
+        }
+
+        async function sendCommandWithParams(scooterId, command, params) {
             const responseEl = document.getElementById(`response-${scooterId}`);
             responseEl.classList.remove('hidden');
-            responseEl.textContent = `Sending ${command} command...`;
+            responseEl.dataset.command = command;
+            responseEl.innerHTML = `<span class="spinner">●</span> ${command}`;
 
             try {
                 const result = await apiRequest('/api/commands', {
@@ -984,33 +1277,46 @@
                     body: JSON.stringify({
                         scooter_id: scooterId,
                         command: command,
-                        params: {}
+                        params: params
                     })
                 });
 
-                responseEl.textContent = `✓ Command sent successfully\nRequest ID: ${result.request_id}`;
+                // Keep spinner while waiting for response
+                responseEl.innerHTML = `<span class="spinner">●</span> ${command} [${result.request_id}]`;
 
                 // Poll for response
-                setTimeout(() => checkCommandResponse(result.request_id, responseEl), 1000);
+                setTimeout(() => checkCommandResponse(result.request_id, responseEl, command), 1000);
             } catch (error) {
-                responseEl.textContent = `✗ Error: ${error.message}`;
+                responseEl.innerHTML = `<span class="error">✗</span> ${command}<br>  ${error.message}`;
             }
         }
 
-        async function checkCommandResponse(requestId, responseEl) {
+        async function checkCommandResponse(requestId, responseEl, command) {
             try {
                 const result = await apiRequest(`/api/commands/${requestId}`);
 
                 if (result.status === 'pending') {
-                    responseEl.textContent += '\nWaiting for response...';
-                    setTimeout(() => checkCommandResponse(requestId, responseEl), 2000);
+                    // Keep spinner, check again
+                    setTimeout(() => checkCommandResponse(requestId, responseEl, command), 2000);
                 } else {
-                    responseEl.textContent = `✓ Response received\nStatus: ${result.status}\n` +
-                        (result.result ? `Result: ${JSON.stringify(result.result, null, 2)}` : '') +
-                        (result.error ? `Error: ${result.error}` : '');
+                    const requestIdShort = requestId.split('-').slice(0, 2).join('-');
+
+                    if (result.status === 'completed' || result.status === 'success') {
+                        // Success - green checkmark
+                        responseEl.innerHTML = `<span class="success">✓</span> ${command} [${requestIdShort}]`;
+
+                        // Auto-dismiss after 5 seconds
+                        setTimeout(() => {
+                            responseEl.classList.add('hidden');
+                        }, 5000);
+                    } else {
+                        // Error - red X with details
+                        responseEl.innerHTML = `<span class="error">✗</span> ${command} [${requestIdShort}]<br>  ${result.error || result.status}`;
+                    }
                 }
             } catch (error) {
                 console.error('Failed to check command response:', error);
+                responseEl.innerHTML = `<span class="error">✗</span> ${command}<br>  ${error.message}`;
             }
         }
 
@@ -1071,6 +1377,13 @@
             ws.onclose = () => {
                 console.log('[WebSocket] Disconnected, reconnecting in', wsReconnectDelay, 'ms');
                 ws = null;
+
+                // Mark all scooters as offline on disconnect
+                scootersData.forEach(scooter => {
+                    scooter.connected = false;
+                    setScooterOffline(scooter.identifier);
+                });
+
                 setTimeout(connectWebSocket, wsReconnectDelay);
                 wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
             };
@@ -1081,7 +1394,29 @@
 
             switch (msg.type) {
                 case 'scooter_list':
-                    scootersData = msg.scooters || [];
+                    // Merge with existing scooters instead of replacing
+                    const newScooters = msg.scooters || [];
+                    const newIds = new Set(newScooters.map(s => s.identifier));
+
+                    // Update or add scooters from the new list
+                    newScooters.forEach(newScooter => {
+                        const existing = scootersData.find(s => s.identifier === newScooter.identifier);
+                        if (existing) {
+                            Object.assign(existing, newScooter);
+                            setScooterOnline(newScooter.identifier);
+                        } else {
+                            scootersData.push(newScooter);
+                        }
+                    });
+
+                    // Scooters not in the new list are now offline
+                    scootersData.forEach(scooter => {
+                        if (!newIds.has(scooter.identifier)) {
+                            scooter.connected = false;
+                            setScooterOffline(scooter.identifier);
+                        }
+                    });
+
                     renderScooters();
                     break;
 
@@ -1090,16 +1425,45 @@
                     break;
 
                 case 'scooter_online':
-                    if (!scootersData.find(s => s.identifier === msg.scooter.identifier)) {
+                    const existing = scootersData.find(s => s.identifier === msg.scooter.identifier);
+                    if (existing) {
+                        Object.assign(existing, msg.scooter);
+                        setScooterOnline(msg.scooter.identifier);
+                    } else {
                         scootersData.push(msg.scooter);
                         renderScooters();
                     }
                     break;
 
                 case 'scooter_offline':
-                    scootersData = scootersData.filter(s => s.identifier !== msg.scooter_id);
-                    renderScooters();
+                    const scooter = scootersData.find(s => s.identifier === msg.scooter_id);
+                    if (scooter) {
+                        scooter.connected = false;
+                        setScooterOffline(msg.scooter_id);
+                    }
                     break;
+            }
+        }
+
+        function setScooterOnline(scooterId) {
+            const card = document.getElementById(`scooter-${scooterId}`);
+            if (card) {
+                card.classList.remove('offline');
+                const statusDot = card.querySelector('.status-dot');
+                const statusText = card.querySelector('.status-indicator span:last-child');
+                if (statusDot) statusDot.className = 'status-dot online';
+                if (statusText) statusText.textContent = 'Connected';
+            }
+        }
+
+        function setScooterOffline(scooterId) {
+            const card = document.getElementById(`scooter-${scooterId}`);
+            if (card) {
+                card.classList.add('offline');
+                const statusDot = card.querySelector('.status-dot');
+                const statusText = card.querySelector('.status-indicator span:last-child');
+                if (statusDot) statusDot.className = 'status-dot offline';
+                if (statusText) statusText.textContent = 'Offline';
             }
         }
 

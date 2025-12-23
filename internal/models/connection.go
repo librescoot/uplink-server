@@ -11,6 +11,7 @@ import (
 type Connection struct {
 	mu            sync.RWMutex
 	Identifier    string
+	Name          string // Human-friendly name (optional)
 	Conn          *websocket.Conn
 	Authenticated bool
 	ConnectedAt   time.Time
