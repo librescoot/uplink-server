@@ -47,7 +47,10 @@ func NewWebSocketHandler(authenticator *auth.Authenticator, connMgr *storage.Con
 
 // HandleConnection handles a WebSocket connection
 func (h *WebSocketHandler) HandleConnection(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	// Wrap response writer to track wire-level bytes
+	statsWriter := NewStatsResponseWriter(w)
+
+	conn, err := upgrader.Upgrade(statsWriter, r, nil)
 	if err != nil {
 		log.Printf("[WS] Upgrade error: %v", err)
 		return
@@ -95,6 +98,7 @@ func (h *WebSocketHandler) HandleConnection(w http.ResponseWriter, r *http.Reque
 	connection.Version = authMsg.Version
 	connection.Authenticated = true
 	connection.Name = h.auth.GetName(authMsg.Identifier)
+	connection.StatsConn = statsWriter.GetStatsConn() // Track wire-level bytes
 
 	// Add to connection manager
 	if err := h.connMgr.AddConnection(connection); err != nil {

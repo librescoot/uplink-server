@@ -14,6 +14,7 @@ var webUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
 		return true // Allow all origins for now
 	},
+	EnableCompression: true,
 }
 
 // WebUIHandler handles WebSocket connections from web UI clients
@@ -57,6 +58,8 @@ type WebMessage struct {
 	// Connection stats (included with state updates for connected scooters)
 	BytesSent         *int64 `json:"bytes_sent,omitempty"`
 	BytesReceived     *int64 `json:"bytes_received,omitempty"`
+	WireBytesSent     *int64 `json:"wire_bytes_sent,omitempty"`
+	WireBytesReceived *int64 `json:"wire_bytes_received,omitempty"`
 	TelemetryReceived *int64 `json:"telemetry_received,omitempty"`
 	CommandsSent      *int64 `json:"commands_sent,omitempty"`
 }
@@ -70,6 +73,8 @@ type ScooterInfo struct {
 	Uptime            int64  `json:"uptime_seconds,omitempty"`
 	BytesSent         int64  `json:"bytes_sent,omitempty"`
 	BytesReceived     int64  `json:"bytes_received,omitempty"`
+	WireBytesS        int64  `json:"wire_bytes_sent,omitempty"`
+	WireBytesRecv     int64  `json:"wire_bytes_received,omitempty"`
 	TelemetryReceived int64  `json:"telemetry_received,omitempty"`
 	CommandsSent      int64  `json:"commands_sent,omitempty"`
 }
@@ -143,7 +148,7 @@ func (h *WebUIHandler) sendScooterList(conn *websocket.Conn) {
 
 	// Add all currently connected scooters
 	for _, c := range connections {
-		scooterMap[c.Identifier] = ScooterInfo{
+		info := ScooterInfo{
 			Identifier:        c.Identifier,
 			Name:              c.Name,
 			Connected:         true,
@@ -154,6 +159,14 @@ func (h *WebUIHandler) sendScooterList(conn *websocket.Conn) {
 			TelemetryReceived: c.TelemetryReceived,
 			CommandsSent:      c.CommandsSent,
 		}
+
+		// Add wire-level stats if available
+		if c.StatsConn != nil {
+			info.WireBytesS = c.StatsConn.BytesWritten()
+			info.WireBytesRecv = c.StatsConn.BytesRead()
+		}
+
+		scooterMap[c.Identifier] = info
 	}
 
 	// Add scooters with persisted state that aren't currently connected
@@ -249,6 +262,14 @@ func (h *WebUIHandler) broadcastUpdates(conn *websocket.Conn, updateChan <-chan 
 				msg.BytesReceived = &c.BytesReceived
 				msg.TelemetryReceived = &c.TelemetryReceived
 				msg.CommandsSent = &c.CommandsSent
+
+				// Add wire-level stats if available
+				if c.StatsConn != nil {
+					wireBytesSent := c.StatsConn.BytesWritten()
+					wireBytesRecv := c.StatsConn.BytesRead()
+					msg.WireBytesSent = &wireBytesSent
+					msg.WireBytesReceived = &wireBytesRecv
+				}
 			}
 
 			if err := conn.WriteJSON(msg); err != nil {
@@ -304,6 +325,12 @@ func (h *WebUIHandler) broadcastConnectionEvents(conn *websocket.Conn, connChan 
 					BytesReceived:     event.Connection.BytesReceived,
 					TelemetryReceived: event.Connection.TelemetryReceived,
 					CommandsSent:      event.Connection.CommandsSent,
+				}
+
+				// Add wire-level stats if available
+				if event.Connection.StatsConn != nil {
+					scooterInfo.WireBytesS = event.Connection.StatsConn.BytesWritten()
+					scooterInfo.WireBytesRecv = event.Connection.StatsConn.BytesRead()
 				}
 
 				msg := WebMessage{

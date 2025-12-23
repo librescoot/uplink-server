@@ -1060,7 +1060,7 @@
                             </div>
                         </div>
                         <div class="connection-status" id="connection-${scooter.identifier}">
-                            ${scooter.version || 'Unknown'} · ${formatDuration(scooter.uptime_seconds)} · ↑${formatBytes(scooter.bytes_received || 0)} ↓${formatBytes(scooter.bytes_sent || 0)} · Tel:${scooter.telemetry_received || 0} Cmd:${scooter.commands_sent || 0}
+                            <!-- Stats will be updated via updateScooterConnectionStats -->
                         </div>
                     </div>
 
@@ -1158,6 +1158,8 @@
             scootersData.forEach(scooter => {
                 if (!existingCards.has(scooter.identifier)) {
                     container.insertAdjacentHTML('beforeend', createScooterCardHTML(scooter));
+                    // Update connection stats immediately with available data
+                    updateScooterConnectionStats(scooter.identifier, scooter);
                 }
             });
         }
@@ -1329,12 +1331,25 @@
             if (!connectionContainer) return;
 
             const uptime = formatDuration(data.uptime_seconds || 0);
-            const bytesSent = formatBytes(data.bytes_sent || 0);
-            const bytesRecv = formatBytes(data.bytes_received || 0);
             const tel = data.telemetry_received || 0;
             const cmd = data.commands_sent || 0;
 
-            connectionContainer.textContent = `${data.version || 'Unknown'} · ${uptime} · ↑${bytesSent} ↓${bytesRecv} · Tel:${tel} Cmd:${cmd}`;
+            let statsText = `${data.version || 'Unknown'} · ${uptime}`;
+
+            // Show wire-level bytes if available, otherwise fall back to app bytes
+            if (data.wire_bytes_sent !== undefined || data.wire_bytes_received !== undefined) {
+                const wireSent = formatBytes(data.wire_bytes_sent || 0);
+                const wireRecv = formatBytes(data.wire_bytes_received || 0);
+                statsText += ` · ↑${wireSent} ↓${wireRecv}`;
+            } else {
+                // Fallback to app bytes if wire stats not available
+                const bytesSent = formatBytes(data.bytes_sent || 0);
+                const bytesRecv = formatBytes(data.bytes_received || 0);
+                statsText += ` · ↑${bytesSent} ↓${bytesRecv}`;
+            }
+
+            statsText += ` · Tel:${tel} Cmd:${cmd}`;
+            connectionContainer.textContent = statsText;
         }
 
         function createTableRowsHTML(fields, changedFields = null) {
@@ -1675,6 +1690,8 @@
                         // Update stats from server if included
                         if (msg.bytes_sent !== undefined) scooterData.bytes_sent = msg.bytes_sent;
                         if (msg.bytes_received !== undefined) scooterData.bytes_received = msg.bytes_received;
+                        if (msg.wire_bytes_sent !== undefined) scooterData.wire_bytes_sent = msg.wire_bytes_sent;
+                        if (msg.wire_bytes_received !== undefined) scooterData.wire_bytes_received = msg.wire_bytes_received;
                         if (msg.telemetry_received !== undefined) scooterData.telemetry_received = msg.telemetry_received;
                         if (msg.commands_sent !== undefined) scooterData.commands_sent = msg.commands_sent;
 

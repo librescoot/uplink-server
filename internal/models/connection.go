@@ -13,12 +13,13 @@ type Connection struct {
 	Identifier    string
 	Name          string // Human-friendly name (optional)
 	Conn          *websocket.Conn
+	StatsConn     interface{ BytesRead() int64; BytesWritten() int64 } // Wire-level stats (optional)
 	Authenticated bool
 	ConnectedAt   time.Time
 	LastSeen      time.Time
 	Version       string
 
-	// Statistics
+	// Statistics (application-level, uncompressed)
 	BytesSent         int64
 	BytesReceived     int64
 	MessagesSent      int64
@@ -100,7 +101,7 @@ func (c *Connection) GetStats() map[string]any {
 	uptime := time.Since(c.ConnectedAt)
 	idle := time.Since(c.LastSeen)
 
-	return map[string]any{
+	stats := map[string]any{
 		"identifier":         c.Identifier,
 		"authenticated":      c.Authenticated,
 		"connected_at":       c.ConnectedAt.Format(time.RFC3339),
@@ -115,6 +116,14 @@ func (c *Connection) GetStats() map[string]any {
 		"commands_sent":      c.CommandsSent,
 		"version":            c.Version,
 	}
+
+	// Add wire-level stats if available
+	if c.StatsConn != nil {
+		stats["wire_bytes_sent"] = c.StatsConn.BytesWritten()
+		stats["wire_bytes_received"] = c.StatsConn.BytesRead()
+	}
+
+	return stats
 }
 
 // SendChannel returns the send channel for this connection
