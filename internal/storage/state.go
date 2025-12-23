@@ -1,6 +1,10 @@
 package storage
 
 import (
+	"encoding/json"
+	"log"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -26,14 +30,23 @@ type StateStore struct {
 	mu          sync.RWMutex
 	states      map[string]*ScooterState
 	subscribers []chan<- StateUpdate
+	filePath    string
 }
 
 // NewStateStore creates a new state store
-func NewStateStore() *StateStore {
-	return &StateStore{
+func NewStateStore(filePath string) *StateStore {
+	ss := &StateStore{
 		states:      make(map[string]*ScooterState),
 		subscribers: make([]chan<- StateUpdate, 0),
+		filePath:    filePath,
 	}
+
+	// Load states from file if it exists
+	if filePath != "" {
+		ss.loadFromFile()
+	}
+
+	return ss
 }
 
 // Subscribe creates a new subscription channel for state updates
@@ -79,6 +92,9 @@ func (ss *StateStore) UpdateState(scooterID string, stateData map[string]any) {
 
 	ss.mu.Unlock()
 
+	// Persist to disk
+	ss.saveToFile()
+
 	// Broadcast to subscribers (outside lock to avoid deadlock)
 	ss.broadcast(StateUpdate{
 		ScooterID: scooterID,
@@ -122,6 +138,9 @@ func (ss *StateStore) UpdateChanges(scooterID string, changes map[string]any) {
 
 	ss.mu.Unlock()
 
+	// Persist to disk
+	ss.saveToFile()
+
 	// Broadcast to subscribers (outside lock to avoid deadlock)
 	ss.broadcast(StateUpdate{
 		ScooterID: scooterID,
@@ -159,7 +178,62 @@ func (ss *StateStore) GetState(scooterID string) (*ScooterState, bool) {
 // RemoveState removes a scooter's state (e.g., when disconnected)
 func (ss *StateStore) RemoveState(scooterID string) {
 	ss.mu.Lock()
-	defer ss.mu.Unlock()
-
 	delete(ss.states, scooterID)
+	ss.mu.Unlock()
+
+	// Persist after removal
+	ss.saveToFile()
+}
+
+// loadFromFile loads state snapshot from disk
+func (ss *StateStore) loadFromFile() {
+	if _, err := os.Stat(ss.filePath); os.IsNotExist(err) {
+		return
+	}
+
+	data, err := os.ReadFile(ss.filePath)
+	if err != nil {
+		log.Printf("[StateStore] Failed to read state file: %v", err)
+		return
+	}
+
+	var states map[string]*ScooterState
+	if err := json.Unmarshal(data, &states); err != nil {
+		log.Printf("[StateStore] Failed to parse state file: %v", err)
+		return
+	}
+
+	ss.states = states
+	log.Printf("[StateStore] Loaded state for %d scooters from %s", len(states), ss.filePath)
+}
+
+// saveToFile writes a snapshot of all states to disk
+func (ss *StateStore) saveToFile() {
+	if ss.filePath == "" {
+		return
+	}
+
+	ss.mu.RLock()
+	data, err := json.MarshalIndent(ss.states, "", "  ")
+	ss.mu.RUnlock()
+
+	if err != nil {
+		log.Printf("[StateStore] Failed to marshal states: %v", err)
+		return
+	}
+
+	// Ensure directory exists
+	dir := filepath.Dir(ss.filePath)
+	os.MkdirAll(dir, 0755)
+
+	// Write atomically via temp file
+	tmpPath := ss.filePath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		log.Printf("[StateStore] Failed to write state file: %v", err)
+		return
+	}
+
+	if err := os.Rename(tmpPath, ss.filePath); err != nil {
+		log.Printf("[StateStore] Failed to rename state file: %v", err)
+	}
 }

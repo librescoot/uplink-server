@@ -43,6 +43,7 @@ type WebMessage struct {
 	State      map[string]any `json:"state,omitempty"`
 	UpdateType string         `json:"update_type,omitempty"` // "full" or "delta"
 	Event      string         `json:"event,omitempty"`
+	EventID    string         `json:"event_id,omitempty"`
 	EventData  map[string]any `json:"event_data,omitempty"`
 	Error      string         `json:"error,omitempty"`
 	Timestamp  string         `json:"timestamp,omitempty"`
@@ -180,11 +181,14 @@ func (h *WebUIHandler) sendInitialEvents(conn *websocket.Conn) {
 
 	for _, c := range connections {
 		events := h.eventStore.GetEvents(c.Identifier, 100) // Get last 100 events
-		for _, event := range events {
+		// Reverse events so oldest is sent first, then prepending in UI reverses back to newest-first
+		for i := len(events) - 1; i >= 0; i-- {
+			event := events[i]
 			msg := WebMessage{
 				Type:      "event",
 				ScooterID: event.ScooterID,
 				Event:     event.Event,
+				EventID:   event.ID,
 				EventData: event.Data,
 				Timestamp: event.Timestamp.UTC().Format(time.RFC3339),
 			}
@@ -229,6 +233,7 @@ func (h *WebUIHandler) broadcastEvents(conn *websocket.Conn, eventChan <-chan *s
 				Type:      "event",
 				ScooterID: event.ScooterID,
 				Event:     event.Event,
+				EventID:   event.ID,
 				EventData: event.Data,
 				Timestamp: event.Timestamp.UTC().Format(time.RFC3339),
 			}

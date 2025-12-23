@@ -35,8 +35,8 @@ func main() {
 	authenticator := auth.NewAuthenticator(config)
 	connMgr := storage.NewConnectionManager()
 	responseStore := storage.NewResponseStore(1 * time.Hour)
-	stateStore := storage.NewStateStore()
-	eventStore := storage.NewEventStore(1000) // Keep last 1000 events per scooter
+	stateStore := storage.NewStateStore("data/state.json")
+	eventStore := storage.NewEventStore(1000, "data/events.jsonl") // Keep last 1000 events per scooter
 
 	// Start stats logger
 	connMgr.StartStatsLogger(config.Logging.GetStatsInterval())

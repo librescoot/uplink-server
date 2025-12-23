@@ -79,16 +79,15 @@ func (h *APIHandler) HandleScooters(w http.ResponseWriter, r *http.Request) {
 	}))(w, r)
 }
 
-// HandleScooterDetail handles GET /api/scooters/{id} and GET /api/scooters/{id}/commands
+// HandleScooterDetail handles GET/DELETE /api/scooters/{id}/*
 func (h *APIHandler) HandleScooterDetail(w http.ResponseWriter, r *http.Request) {
 	h.cors(h.authenticate(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			h.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
-			return
-		}
-
 		// Check which endpoint is being requested
 		if isCommandHistoryRequest(r.URL.Path) {
+			if r.Method != http.MethodGet {
+				h.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+				return
+			}
 			scooterID := extractScooterIDFromCommandPath(r.URL.Path)
 			if scooterID == "" {
 				h.writeError(w, http.StatusBadRequest, "Scooter ID required")
@@ -96,6 +95,10 @@ func (h *APIHandler) HandleScooterDetail(w http.ResponseWriter, r *http.Request)
 			}
 			h.handleGetScooterCommands(w, r, scooterID)
 		} else if isStateRequest(r.URL.Path) {
+			if r.Method != http.MethodGet {
+				h.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+				return
+			}
 			scooterID := extractScooterIDFromStatePath(r.URL.Path)
 			if scooterID == "" {
 				h.writeError(w, http.StatusBadRequest, "Scooter ID required")
@@ -103,13 +106,30 @@ func (h *APIHandler) HandleScooterDetail(w http.ResponseWriter, r *http.Request)
 			}
 			h.handleGetScooterState(w, r, scooterID)
 		} else if isEventsRequest(r.URL.Path) {
-			scooterID := extractScooterIDFromEventsPath(r.URL.Path)
+			scooterID, eventID := extractScooterIDAndEventIDFromEventsPath(r.URL.Path)
 			if scooterID == "" {
 				h.writeError(w, http.StatusBadRequest, "Scooter ID required")
 				return
 			}
-			h.handleGetScooterEvents(w, r, scooterID)
+
+			if r.Method == http.MethodGet {
+				h.handleGetScooterEvents(w, r, scooterID)
+			} else if r.Method == http.MethodDelete {
+				if eventID == "" {
+					// DELETE /api/scooters/{id}/events - clear all events
+					h.handleClearScooterEvents(w, r, scooterID)
+				} else {
+					// DELETE /api/scooters/{id}/events/{eventID} - delete single event
+					h.handleDeleteScooterEvent(w, r, scooterID, eventID)
+				}
+			} else {
+				h.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+			}
 		} else {
+			if r.Method != http.MethodGet {
+				h.writeError(w, http.StatusMethodNotAllowed, "Method not allowed")
+				return
+			}
 			scooterID := extractPathParam(r.URL.Path, "/api/scooters/")
 			if scooterID == "" {
 				h.writeError(w, http.StatusBadRequest, "Scooter ID required")
@@ -290,7 +310,7 @@ func (h *APIHandler) authenticate(next http.HandlerFunc) http.HandlerFunc {
 func (h *APIHandler) cors(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
 
 		if r.Method == http.MethodOptions {
@@ -378,7 +398,7 @@ func extractScooterIDFromStatePath(path string) string {
 
 // isEventsRequest checks if path is for events data
 func isEventsRequest(path string) bool {
-	return strings.HasSuffix(path, "/events")
+	return strings.HasSuffix(path, "/events") || strings.Contains(path, "/events/")
 }
 
 // extractScooterIDFromEventsPath extracts scooter ID from /api/scooters/{id}/events
@@ -386,6 +406,17 @@ func extractScooterIDFromEventsPath(path string) string {
 	path = strings.TrimPrefix(path, "/api/scooters/")
 	path = strings.TrimSuffix(path, "/events")
 	return path
+}
+
+// extractScooterIDAndEventIDFromEventsPath extracts scooter ID and event ID from /api/scooters/{id}/events[/{eventID}]
+func extractScooterIDAndEventIDFromEventsPath(path string) (string, string) {
+	path = strings.TrimPrefix(path, "/api/scooters/")
+	parts := strings.Split(path, "/events/")
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	path = strings.TrimSuffix(parts[0], "/events")
+	return path, ""
 }
 
 // handleGetScooterEvents retrieves events for a scooter
@@ -402,5 +433,39 @@ func (h *APIHandler) handleGetScooterEvents(w http.ResponseWriter, r *http.Reque
 		"scooter_id": scooterID,
 		"events":     events,
 		"total":      len(events),
+	})
+}
+
+// handleDeleteScooterEvent deletes a single event
+func (h *APIHandler) handleDeleteScooterEvent(w http.ResponseWriter, r *http.Request, scooterID, eventID string) {
+	_, exists := h.connMgr.GetConnection(scooterID)
+	if !exists {
+		h.writeError(w, http.StatusNotFound, "Scooter not connected")
+		return
+	}
+
+	deleted := h.eventStore.DeleteEvent(scooterID, eventID)
+	if !deleted {
+		h.writeError(w, http.StatusNotFound, "Event not found")
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"message": "Event deleted",
+	})
+}
+
+// handleClearScooterEvents clears all events for a scooter
+func (h *APIHandler) handleClearScooterEvents(w http.ResponseWriter, r *http.Request, scooterID string) {
+	_, exists := h.connMgr.GetConnection(scooterID)
+	if !exists {
+		h.writeError(w, http.StatusNotFound, "Scooter not connected")
+		return
+	}
+
+	h.eventStore.ClearEvents(scooterID)
+
+	h.writeJSON(w, http.StatusOK, map[string]any{
+		"message": "All events cleared",
 	})
 }

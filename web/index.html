@@ -258,38 +258,45 @@
         }
 
         .event-item {
-            padding: 8px 12px;
+            padding: 10px 12px;
             background: #f8f9fa;
             border-left: 3px solid #3498db;
             margin-bottom: 8px;
             border-radius: 4px;
-            font-size: 13px;
+            position: relative;
         }
 
-        .event-header {
+        .event-description {
+            font-size: 14px;
+            color: #2c3e50;
+            padding-right: 24px;
+            line-height: 1.4;
+        }
+
+        .event-meta {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
+            margin-top: 6px;
+            font-size: 11px;
+            color: #7f8c8d;
         }
 
         .event-name {
-            font-weight: 600;
-            color: #2c3e50;
-            flex: 1;
+            font-family: ui-monospace, 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Menlo, Consolas, monospace;
         }
 
         .event-time {
-            color: #7f8c8d;
-            font-size: 12px;
-            margin-right: 8px;
+            /* timestamp styling */
         }
 
         .event-dismiss {
+            position: absolute;
+            top: 8px;
+            right: 8px;
             cursor: pointer;
             color: #95a5a6;
             font-weight: bold;
-            padding: 0 4px;
+            padding: 2px 4px;
             font-size: 16px;
             line-height: 1;
             user-select: none;
@@ -317,13 +324,6 @@
             text-decoration: underline;
         }
 
-        .event-data {
-            font-family: ui-monospace, 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Menlo, Consolas, monospace;
-            font-size: 12px;
-            color: #555;
-            white-space: pre-wrap;
-            margin-top: 4px;
-        }
 
         .state-section {
             margin-top: 15px;
@@ -1195,35 +1195,47 @@
         function formatEventData(eventName, data) {
             switch (eventName) {
                 case 'battery_critical':
+                case 'cb_battery_critical':
                     const battery = data.battery || 'unknown';
                     const charge = data.charge || 'unknown';
-                    return `⚠️ <strong>${battery}</strong> is critically low at <strong>${charge}%</strong>`;
+                    return `⚠️ ${battery} is critically low at ${charge}%`;
 
                 case 'power_state_change':
-                    return `🔋 Power state changed from <strong>${data.from}</strong> to <strong>${data.to}</strong>`;
+                    return `🔋 Power state: ${data.from} → ${data.to}`;
 
                 case 'connectivity_lost':
-                    return `📡 Internet connection lost (status: ${data.status || 'unknown'})`;
+                    return `📡 Internet connection lost`;
 
                 case 'connectivity_regained':
-                    return `✅ Internet connection restored (status: ${data.status || 'unknown'})`;
+                    return `✅ Internet connection restored`;
 
                 case 'lock_state_change':
                     const lock = data.lock || 'unknown';
                     const state = data.state || 'unknown';
                     const lockIcon = lock === 'handlebar' ? '🔒' : '🔐';
-                    return `${lockIcon} ${lock} lock: <strong>${state}</strong>`;
+                    return `${lockIcon} ${lock} lock: ${state}`;
 
                 case 'gps_fix_lost':
-                    return `📍 GPS fix lost (state: ${data.state || 'unknown'})`;
+                    return `📍 GPS fix lost`;
 
                 case 'gps_fix_regained':
-                    return `✅ GPS fix regained (state: ${data.state || 'unknown'})`;
+                    return `✅ GPS fix regained`;
 
                 case 'temperature_warning':
                     const component = data.component || 'unknown';
                     const temp = data.temperature || 'unknown';
-                    return `🌡️ <strong>${component}</strong> temperature is high: <strong>${temp}°C</strong>`;
+                    return `🌡️ ${component} temperature is high: ${temp}°C`;
+
+                case 'fault':
+                    const faultGroup = data.group || 'unknown';
+                    const faultCode = data.code || 'unknown';
+                    const faultDesc = data.description ? `: ${data.description}` : '';
+                    return `⚠️ Fault in ${faultGroup} (code ${faultCode})${faultDesc}`;
+
+                case 'nrf_reset':
+                    const resetCount = data.count || 'unknown';
+                    const resetReason = data.reason || 'unknown';
+                    return `📡 NRF reset (count: ${resetCount}, reason: ${resetReason})`;
 
                 default:
                     if (data && Object.keys(data).length > 0) {
@@ -1249,25 +1261,37 @@
             if (section) section.style.display = 'block';
             if (clearBtn) clearBtn.style.display = events.length > 1 ? 'inline' : 'none';
 
-            container.innerHTML = events.map((event, index) => {
+            // Events from REST API are newest-first, render as-is
+            container.innerHTML = events.map((event) => {
                 const time = new Date(event.timestamp).toLocaleString();
                 const formattedData = formatEventData(event.event, event.data || {});
 
                 return `
-                    <div class="event-item" id="event-${scooterId}-${index}">
-                        <div class="event-header">
+                    <div class="event-item" id="event-ui-${scooterId}-${event.id}">
+                        <span class="event-dismiss" onclick="dismissEvent('${scooterId}', '${event.id}')">✕</span>
+                        <div class="event-description">${formattedData || event.event}</div>
+                        <div class="event-meta">
                             <span class="event-name">${event.event}</span>
                             <span class="event-time">${time}</span>
-                            <span class="event-dismiss" onclick="dismissEvent('${scooterId}', 'event-${scooterId}-${index}')">✕</span>
                         </div>
-                        ${formattedData ? `<div class="event-data">${formattedData}</div>` : ''}
                     </div>
                 `;
             }).join('');
         }
 
-        function dismissEvent(scooterId, eventId) {
-            const eventEl = document.getElementById(eventId);
+        async function dismissEvent(scooterId, eventId) {
+            try {
+                await apiRequest(`/api/scooters/${scooterId}/events/${eventId}`, {
+                    method: 'DELETE'
+                });
+            } catch (error) {
+                console.error('Failed to dismiss event:', error);
+                alert('Failed to dismiss event. Please try again.');
+                return;
+            }
+
+            // Only remove from DOM if API call succeeded
+            const eventEl = document.getElementById(`event-ui-${scooterId}-${eventId}`);
             if (eventEl) eventEl.remove();
 
             const container = document.getElementById(`events-${scooterId}`);
@@ -1283,7 +1307,18 @@
             }
         }
 
-        function clearAllEvents(scooterId) {
+        async function clearAllEvents(scooterId) {
+            try {
+                await apiRequest(`/api/scooters/${scooterId}/events`, {
+                    method: 'DELETE'
+                });
+            } catch (error) {
+                console.error('Failed to clear events:', error);
+                alert('Failed to clear events. Please try again.');
+                return;
+            }
+
+            // Only clear from DOM if API call succeeded
             const container = document.getElementById(`events-${scooterId}`);
             const section = document.getElementById(`events-section-${scooterId}`);
             const clearBtn = document.getElementById(`clear-events-${scooterId}`);
@@ -1656,6 +1691,7 @@
                 case 'event':
                     // Add new event to the top of the list
                     addEventToDisplay(msg.scooter_id, {
+                        id: msg.event_id,
                         event: msg.event,
                         data: msg.event_data || {},
                         timestamp: msg.timestamp
@@ -1673,18 +1709,14 @@
             const time = new Date(event.timestamp).toLocaleString();
             const formattedData = formatEventData(event.event, event.data || {});
 
-            const existingEvents = container.querySelectorAll('.event-item');
-            const eventIndex = existingEvents.length;
-            const eventId = `event-${scooterId}-${eventIndex}`;
-
             const eventHtml = `
-                <div class="event-item" id="${eventId}">
-                    <div class="event-header">
+                <div class="event-item" id="event-ui-${scooterId}-${event.id}">
+                    <span class="event-dismiss" onclick="dismissEvent('${scooterId}', '${event.id}')">✕</span>
+                    <div class="event-description">${formattedData || event.event}</div>
+                    <div class="event-meta">
                         <span class="event-name">${event.event}</span>
                         <span class="event-time">${time}</span>
-                        <span class="event-dismiss" onclick="dismissEvent('${scooterId}', '${eventId}')">✕</span>
                     </div>
-                    ${formattedData ? `<div class="event-data">${formattedData}</div>` : ''}
                 </div>
             `;
 
