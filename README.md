@@ -114,12 +114,44 @@ Content-Type: application/json
   "command": "lock",
   "params": {}
 }
+
+# Response:
+{
+  "request_id": "20250123-154530.123456",
+  "status": "sent"
+}
 ```
+
+The `request_id` is a server-generated unique identifier for tracking the command. Format: `YYYYMMDD-HHMMSS.microseconds`
 
 **Get command result:**
 ```bash
 GET /api/commands/{request_id}
+
+# Response (pending):
+{
+  "request_id": "20250123-154530.123456",
+  "scooter_id": "WUNU2S3B7MZ000147",
+  "status": "pending",
+  "sent_at": "2025-01-23T15:45:30Z"
+}
+
+# Response (completed):
+{
+  "request_id": "20250123-154530.123456",
+  "scooter_id": "WUNU2S3B7MZ000147",
+  "status": "success",
+  "result": {...},
+  "sent_at": "2025-01-23T15:45:30Z",
+  "completed_at": "2025-01-23T15:45:31Z"
+}
 ```
+
+**Response storage:**
+- Command responses are stored in-memory for **1 hour**
+- Automatic cleanup runs every 10 minutes
+- Poll the `/api/commands/{request_id}` endpoint to check status
+- Status values: `pending`, `success`, `error`
 
 ## Monitoring
 
@@ -226,9 +258,8 @@ To connect a scooter to the uplink server:
 **WebSocket compression:**
 Enable per-message deflate compression for bandwidth savings (typically 20-40% reduction).
 
-**Example clients:**
-- librescoot vehicle-service: Reference implementation in Go
-- See protocol examples above for message formats
+**Reference client:**
+- [librescoot/uplink-service](https://github.com/librescoot/uplink-service) - Go client implementation for scooters
 
 ## Architecture
 
