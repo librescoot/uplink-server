@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"flag"
@@ -8,6 +9,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"gopkg.in/yaml.v2"
@@ -95,9 +98,25 @@ func main() {
 	log.Printf("Keepalive interval: %s", config.Server.KeepaliveInterval)
 	log.Printf("Configured scooters: %d", len(config.Auth.Tokens))
 
-	if err := http.ListenAndServe(wsAddr, nil); err != nil {
-		log.Fatalf("WebSocket server error: %v", err)
+	server := &http.Server{Addr: wsAddr}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigChan
+		log.Printf("Received signal %v, shutting down...", sig)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			log.Printf("Shutdown error: %v", err)
+		}
+	}()
+
+	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		log.Fatalf("Server error: %v", err)
 	}
+	log.Printf("Server stopped")
 }
 
 func loadConfig(path string) (*models.Config, error) {
