@@ -18,6 +18,9 @@ type ServerConfig struct {
 	EnableWebUI       bool   `yaml:"enable_web_ui"`
 	KeepaliveInterval string `yaml:"keepalive_interval"`
 	LPTimeout         string `yaml:"lp_timeout"`
+	MaxConnections    int    `yaml:"max_connections"`
+	MessageRateLimit  int    `yaml:"message_rate_limit"`  // max messages per second per connection (0 = unlimited)
+	IdleTimeout       string `yaml:"idle_timeout"`        // disconnect after no messages for this duration (0 = disabled)
 }
 
 // ScooterConfig contains scooter-specific settings
@@ -57,6 +60,18 @@ func (c *ServerConfig) GetLPTimeout() time.Duration {
 	d, err := time.ParseDuration(c.LPTimeout)
 	if err != nil {
 		return 24 * time.Hour
+	}
+	return d
+}
+
+// GetIdleTimeout parses and returns the idle timeout duration
+func (c *ServerConfig) GetIdleTimeout() time.Duration {
+	if c.IdleTimeout == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(c.IdleTimeout)
+	if err != nil {
+		return 0
 	}
 	return d
 }

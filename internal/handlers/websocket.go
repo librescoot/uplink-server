@@ -29,10 +29,12 @@ type WebSocketHandler struct {
 	stateStore        *storage.StateStore
 	eventStore        *storage.EventStore
 	keepaliveInterval time.Duration
+	messageRateLimit  int
+	idleTimeout       time.Duration
 }
 
 // NewWebSocketHandler creates a new WebSocket handler
-func NewWebSocketHandler(authenticator *auth.Authenticator, connMgr *storage.ConnectionManager, responseStore *storage.ResponseStore, stateStore *storage.StateStore, eventStore *storage.EventStore, keepaliveInterval time.Duration) *WebSocketHandler {
+func NewWebSocketHandler(authenticator *auth.Authenticator, connMgr *storage.ConnectionManager, responseStore *storage.ResponseStore, stateStore *storage.StateStore, eventStore *storage.EventStore, keepaliveInterval time.Duration, messageRateLimit int, idleTimeout time.Duration) *WebSocketHandler {
 	return &WebSocketHandler{
 		auth:              authenticator,
 		connMgr:           connMgr,
@@ -40,6 +42,8 @@ func NewWebSocketHandler(authenticator *auth.Authenticator, connMgr *storage.Con
 		stateStore:        stateStore,
 		eventStore:        eventStore,
 		keepaliveInterval: keepaliveInterval,
+		messageRateLimit:  messageRateLimit,
+		idleTimeout:       idleTimeout,
 	}
 }
 
@@ -130,6 +134,13 @@ func (h *WebSocketHandler) HandleConnection(w http.ResponseWriter, r *http.Reque
 
 // messageReceiver handles incoming messages
 func (h *WebSocketHandler) messageReceiver(conn *models.Connection) {
+	var rateLimiter <-chan time.Time
+	if h.messageRateLimit > 0 {
+		ticker := time.NewTicker(time.Second / time.Duration(h.messageRateLimit))
+		defer ticker.Stop()
+		rateLimiter = ticker.C
+	}
+
 	for {
 		_, message, err := conn.Conn.ReadMessage()
 		if err != nil {
@@ -137,6 +148,11 @@ func (h *WebSocketHandler) messageReceiver(conn *models.Connection) {
 				log.Printf("[WS] Read error from %s: %v", conn.Identifier, err)
 			}
 			return
+		}
+
+		// Rate limit: wait for next token before processing
+		if rateLimiter != nil {
+			<-rateLimiter
 		}
 
 		conn.AddBytesReceived(int64(len(message)))
@@ -239,7 +255,7 @@ func (h *WebSocketHandler) messageSender(conn *models.Connection, done <-chan st
 	}
 }
 
-// keepaliveSender sends periodic keepalive messages
+// keepaliveSender sends periodic keepalive messages and checks idle timeout
 func (h *WebSocketHandler) keepaliveSender(conn *models.Connection, done <-chan struct{}) {
 	ticker := time.NewTicker(h.keepaliveInterval)
 	defer ticker.Stop()
@@ -249,6 +265,16 @@ func (h *WebSocketHandler) keepaliveSender(conn *models.Connection, done <-chan 
 		case <-done:
 			return
 		case <-ticker.C:
+			// Check idle timeout
+			if h.idleTimeout > 0 {
+				idle := time.Since(conn.GetLastSeen())
+				if idle > h.idleTimeout {
+					log.Printf("[WS] Idle timeout for %s (last seen %s ago)", conn.Identifier, idle.Round(time.Second))
+					conn.Conn.Close()
+					return
+				}
+			}
+
 			keepalive := protocol.KeepaliveMessage{
 				Type:      protocol.MsgTypeKeepalive,
 				Timestamp: protocol.Timestamp(),

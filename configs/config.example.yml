@@ -5,6 +5,9 @@ server:
   enable_web_ui: true
   keepalive_interval: "5m"
   lp_timeout: "24h"
+  max_connections: 0       # 0 = unlimited
+  message_rate_limit: 0    # max messages/sec per connection, 0 = unlimited
+  idle_timeout: ""         # disconnect idle clients, e.g. "30m", empty = disabled
 
 auth:
   api_key: "dev-api-key-change-in-production"

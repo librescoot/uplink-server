@@ -50,7 +50,7 @@ func main() {
 
 	// Initialize components
 	authenticator := auth.NewAuthenticator(config)
-	connMgr := storage.NewConnectionManager()
+	connMgr := storage.NewConnectionManager(config.Server.MaxConnections)
 	responseStore := storage.NewResponseStore(1 * time.Hour)
 	stateStore := storage.NewStateStore("data/state.json")
 	eventStore := storage.NewEventStore(1000, "data/events.jsonl") // Keep last 1000 events per scooter
@@ -66,6 +66,8 @@ func main() {
 		stateStore,
 		eventStore,
 		config.Server.GetKeepaliveInterval(),
+		config.Server.MessageRateLimit,
+		config.Server.GetIdleTimeout(),
 	)
 
 	apiHandler := handlers.NewAPIHandler(wsHandler, connMgr, responseStore, stateStore, eventStore, config.Auth.APIKey)
@@ -96,6 +98,15 @@ func main() {
 	}
 	log.Printf("  REST API endpoints: /api/commands, /api/scooters")
 	log.Printf("Keepalive interval: %s", config.Server.KeepaliveInterval)
+	if config.Server.MaxConnections > 0 {
+		log.Printf("Max connections: %d", config.Server.MaxConnections)
+	}
+	if config.Server.MessageRateLimit > 0 {
+		log.Printf("Message rate limit: %d msg/s per connection", config.Server.MessageRateLimit)
+	}
+	if config.Server.GetIdleTimeout() > 0 {
+		log.Printf("Idle timeout: %s", config.Server.IdleTimeout)
+	}
 	log.Printf("Configured scooters: %d", len(config.Auth.Tokens))
 
 	server := &http.Server{Addr: wsAddr}

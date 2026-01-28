@@ -54,6 +54,13 @@ func (c *Connection) UpdateLastSeen() {
 	c.LastSeen = time.Now()
 }
 
+// GetLastSeen returns the last seen timestamp
+func (c *Connection) GetLastSeen() time.Time {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.LastSeen
+}
+
 // AddBytesSent adds to bytes sent counter
 func (c *Connection) AddBytesSent(n int64) {
 	c.mu.Lock()

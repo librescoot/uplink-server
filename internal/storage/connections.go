@@ -18,10 +18,11 @@ type ConnectionEvent struct {
 
 // ConnectionManager manages active scooter connections
 type ConnectionManager struct {
-	mu          sync.RWMutex
-	connections map[string]*models.Connection
-	subscribers map[int]chan ConnectionEvent
-	nextSubID   int
+	mu             sync.RWMutex
+	connections    map[string]*models.Connection
+	subscribers    map[int]chan ConnectionEvent
+	nextSubID      int
+	maxConnections int
 
 	// Statistics
 	totalConnections   int64
@@ -32,11 +33,13 @@ type ConnectionManager struct {
 	totalBytesReceived int64
 }
 
-// NewConnectionManager creates a new connection manager
-func NewConnectionManager() *ConnectionManager {
+// NewConnectionManager creates a new connection manager.
+// maxConnections of 0 means unlimited.
+func NewConnectionManager(maxConnections int) *ConnectionManager {
 	return &ConnectionManager{
-		connections: make(map[string]*models.Connection),
-		subscribers: make(map[int]chan ConnectionEvent),
+		connections:    make(map[string]*models.Connection),
+		subscribers:    make(map[int]chan ConnectionEvent),
+		maxConnections: maxConnections,
 	}
 }
 
@@ -80,6 +83,10 @@ func (cm *ConnectionManager) broadcast(event ConnectionEvent) {
 // AddConnection adds a new connection
 func (cm *ConnectionManager) AddConnection(conn *models.Connection) error {
 	cm.mu.Lock()
+	if cm.maxConnections > 0 && len(cm.connections) >= cm.maxConnections {
+		cm.mu.Unlock()
+		return fmt.Errorf("max connections reached (%d)", cm.maxConnections)
+	}
 	cm.connections[conn.Identifier] = conn
 	cm.totalConnections++
 	cm.mu.Unlock()
