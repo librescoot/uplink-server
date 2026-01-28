@@ -106,17 +106,16 @@ func (h *WebUIHandler) HandleWebConnection(w http.ResponseWriter, r *http.Reques
 	h.sendScooterList(conn)
 
 	// Subscribe to state updates
-	updateChan := h.stateStore.Subscribe()
-	defer func() {
-		// Note: We don't close the channel as other subscribers may be using it
-		// The StateStore manages subscriber lifecycle
-	}()
+	updateChan, stateSubID := h.stateStore.Subscribe()
+	defer h.stateStore.Unsubscribe(stateSubID)
 
 	// Subscribe to event updates
-	eventChan := h.eventStore.Subscribe()
+	eventChan, eventSubID := h.eventStore.Subscribe()
+	defer h.eventStore.Unsubscribe(eventSubID)
 
 	// Subscribe to connection events
-	connChan := h.connMgr.Subscribe()
+	connChan, connSubID := h.connMgr.Subscribe()
+	defer h.connMgr.Unsubscribe(connSubID)
 
 	// Send initial state for all connected scooters
 	h.sendInitialStates(conn)

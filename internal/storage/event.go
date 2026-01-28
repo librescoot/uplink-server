@@ -24,7 +24,8 @@ type EventStore struct {
 	mu            sync.RWMutex
 	events        map[string][]*Event // scooter_id -> events list
 	maxPerScooter int
-	subscribers   []chan<- *Event
+	subscribers   map[int]chan *Event
+	nextSubID     int
 	filePath      string
 }
 
@@ -33,7 +34,7 @@ func NewEventStore(maxPerScooter int, filePath string) *EventStore {
 	s := &EventStore{
 		events:        make(map[string][]*Event),
 		maxPerScooter: maxPerScooter,
-		subscribers:   make([]chan<- *Event, 0),
+		subscribers:   make(map[int]chan *Event),
 		filePath:      filePath,
 	}
 
@@ -45,13 +46,27 @@ func NewEventStore(maxPerScooter int, filePath string) *EventStore {
 	return s
 }
 
-// Subscribe adds a subscriber channel for event updates
-func (s *EventStore) Subscribe() <-chan *Event {
+// Subscribe adds a subscriber channel for event updates.
+// Returns the channel and an ID used to unsubscribe.
+func (s *EventStore) Subscribe() (<-chan *Event, int) {
 	ch := make(chan *Event, 100)
 	s.mu.Lock()
-	s.subscribers = append(s.subscribers, ch)
+	id := s.nextSubID
+	s.nextSubID++
+	s.subscribers[id] = ch
 	s.mu.Unlock()
-	return ch
+	return ch, id
+}
+
+// Unsubscribe removes a subscriber by ID and closes its channel
+func (s *EventStore) Unsubscribe(id int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if ch, ok := s.subscribers[id]; ok {
+		close(ch)
+		delete(s.subscribers, id)
+	}
 }
 
 // broadcast sends an event to all subscribers

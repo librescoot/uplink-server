@@ -30,7 +30,8 @@ type StateUpdate struct {
 type StateStore struct {
 	mu          sync.RWMutex
 	states      map[string]*ScooterState
-	subscribers []chan<- StateUpdate
+	subscribers map[int]chan StateUpdate
+	nextSubID   int
 	filePath    string
 }
 
@@ -38,7 +39,7 @@ type StateStore struct {
 func NewStateStore(filePath string) *StateStore {
 	ss := &StateStore{
 		states:      make(map[string]*ScooterState),
-		subscribers: make([]chan<- StateUpdate, 0),
+		subscribers: make(map[int]chan StateUpdate),
 		filePath:    filePath,
 	}
 
@@ -50,13 +51,27 @@ func NewStateStore(filePath string) *StateStore {
 	return ss
 }
 
-// Subscribe creates a new subscription channel for state updates
-func (ss *StateStore) Subscribe() <-chan StateUpdate {
+// Subscribe creates a new subscription channel for state updates.
+// Returns the channel and an ID used to unsubscribe.
+func (ss *StateStore) Subscribe() (<-chan StateUpdate, int) {
 	ch := make(chan StateUpdate, 100)
 	ss.mu.Lock()
-	ss.subscribers = append(ss.subscribers, ch)
+	id := ss.nextSubID
+	ss.nextSubID++
+	ss.subscribers[id] = ch
 	ss.mu.Unlock()
-	return ch
+	return ch, id
+}
+
+// Unsubscribe removes a subscriber by ID and closes its channel
+func (ss *StateStore) Unsubscribe(id int) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+
+	if ch, ok := ss.subscribers[id]; ok {
+		close(ch)
+		delete(ss.subscribers, id)
+	}
 }
 
 // broadcast sends a state update to all subscribers

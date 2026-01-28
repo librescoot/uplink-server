@@ -20,7 +20,8 @@ type ConnectionEvent struct {
 type ConnectionManager struct {
 	mu          sync.RWMutex
 	connections map[string]*models.Connection
-	subscribers []chan<- ConnectionEvent
+	subscribers map[int]chan ConnectionEvent
+	nextSubID   int
 
 	// Statistics
 	totalConnections   int64
@@ -35,17 +36,31 @@ type ConnectionManager struct {
 func NewConnectionManager() *ConnectionManager {
 	return &ConnectionManager{
 		connections: make(map[string]*models.Connection),
-		subscribers: make([]chan<- ConnectionEvent, 0),
+		subscribers: make(map[int]chan ConnectionEvent),
 	}
 }
 
-// Subscribe adds a subscriber for connection events
-func (cm *ConnectionManager) Subscribe() <-chan ConnectionEvent {
+// Subscribe adds a subscriber for connection events.
+// Returns the channel and an ID used to unsubscribe.
+func (cm *ConnectionManager) Subscribe() (<-chan ConnectionEvent, int) {
 	ch := make(chan ConnectionEvent, 10)
 	cm.mu.Lock()
-	cm.subscribers = append(cm.subscribers, ch)
+	id := cm.nextSubID
+	cm.nextSubID++
+	cm.subscribers[id] = ch
 	cm.mu.Unlock()
-	return ch
+	return ch, id
+}
+
+// Unsubscribe removes a subscriber by ID and closes its channel
+func (cm *ConnectionManager) Unsubscribe(id int) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+
+	if ch, ok := cm.subscribers[id]; ok {
+		close(ch)
+		delete(cm.subscribers, id)
+	}
 }
 
 // broadcast sends a connection event to all subscribers
