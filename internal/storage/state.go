@@ -209,11 +209,9 @@ func (ss *StateStore) GetAllStates() map[string]*ScooterState {
 // SetVersion updates the version for a scooter
 func (ss *StateStore) SetVersion(scooterID, version string) {
 	ss.mu.Lock()
-	defer ss.mu.Unlock()
 
 	state, exists := ss.states[scooterID]
 	if !exists {
-		// Create new state entry if it doesn't exist
 		state = &ScooterState{
 			ScooterID: scooterID,
 			State:     make(map[string]any),
@@ -224,8 +222,9 @@ func (ss *StateStore) SetVersion(scooterID, version string) {
 	state.Version = version
 	state.LastUpdated = time.Now()
 
-	// Persist to disk (outside lock to avoid holding it too long)
-	go ss.saveToFile()
+	ss.mu.Unlock()
+
+	ss.saveToFile()
 }
 
 // RemoveState removes a scooter's state (e.g., when disconnected)
