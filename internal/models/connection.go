@@ -27,6 +27,9 @@ type Connection struct {
 	TelemetryReceived int64
 	CommandsSent      int64
 
+	// Per-connection write mutex (gorilla/websocket requires serialized writes)
+	WriteMu sync.Mutex
+
 	// Channels for command sending
 	sendChan chan []byte
 	done     chan struct{}
@@ -141,8 +144,9 @@ func (c *Connection) Done() <-chan struct{} {
 	return c.done
 }
 
-// Close closes the connection
+// Close signals the connection to shut down.
+// sendChan is not closed here; the messageSender goroutine drains it after
+// observing done and is the only goroutine that should stop reading from it.
 func (c *Connection) Close() {
 	close(c.done)
-	close(c.sendChan)
 }

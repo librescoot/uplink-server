@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -30,7 +29,6 @@ type WebSocketHandler struct {
 	stateStore        *storage.StateStore
 	eventStore        *storage.EventStore
 	keepaliveInterval time.Duration
-	writeMu           sync.Mutex
 }
 
 // NewWebSocketHandler creates a new WebSocket handler
@@ -226,9 +224,9 @@ func (h *WebSocketHandler) messageSender(conn *models.Connection, done <-chan st
 		case <-done:
 			return
 		case message := <-conn.ReceiveChannel():
-			h.writeMu.Lock()
+			conn.WriteMu.Lock()
 			err := conn.Conn.WriteMessage(websocket.TextMessage, message)
-			h.writeMu.Unlock()
+			conn.WriteMu.Unlock()
 
 			if err != nil {
 				log.Printf("[WS] Write error to %s: %v", conn.Identifier, err)
@@ -286,9 +284,6 @@ func (h *WebSocketHandler) sendAuthResponse(conn *websocket.Conn, status, errMsg
 		log.Printf("[WS] Failed to marshal auth response: %v", err)
 		return
 	}
-
-	h.writeMu.Lock()
-	defer h.writeMu.Unlock()
 
 	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 		log.Printf("[WS] Failed to send auth response: %v", err)
