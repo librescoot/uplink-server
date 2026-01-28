@@ -89,10 +89,11 @@ func (cm *ConnectionManager) AddConnection(conn *models.Connection) error {
 	}
 	cm.connections[conn.Identifier] = conn
 	cm.totalConnections++
+	total := len(cm.connections)
 	cm.mu.Unlock()
 
 	log.Printf("[ConnectionManager] Added connection for %s (total: %d)",
-		conn.Identifier, len(cm.connections))
+		conn.Identifier, total)
 
 	// Broadcast connection event
 	cm.broadcast(ConnectionEvent{
@@ -121,10 +122,11 @@ func (cm *ConnectionManager) RemoveConnection(identifier string) {
 	cm.totalCommandsSent += stats["commands_sent"].(int64)
 
 	delete(cm.connections, identifier)
+	remaining := len(cm.connections)
 	cm.mu.Unlock()
 
 	log.Printf("[ConnectionManager] Removed connection for %s (remaining: %d)",
-		identifier, len(cm.connections))
+		identifier, remaining)
 
 	// Broadcast disconnection event
 	cm.broadcast(ConnectionEvent{
