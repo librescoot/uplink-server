@@ -27,6 +27,7 @@ type EventStore struct {
 	subscribers   map[int]chan *Event
 	nextSubID     int
 	filePath      string
+	appendCount   int // appends since last compaction
 }
 
 // NewEventStore creates a new event store
@@ -236,10 +237,18 @@ func (s *EventStore) AddEvent(scooterID, eventName string, data map[string]any, 
 
 		s.events[scooterID] = events
 	}
+	s.appendCount++
+	needsCompaction := s.appendCount >= s.maxPerScooter
+	if needsCompaction {
+		s.appendCount = 0
+		// Rewrite file to match in-memory state, preventing unbounded growth
+		s.rewriteFile()
+	}
 	s.mu.Unlock()
 
-	// Persist to file
-	s.appendToFile(event)
+	if !needsCompaction {
+		s.appendToFile(event)
+	}
 
 	// Broadcast to subscribers
 	s.broadcast(event)
