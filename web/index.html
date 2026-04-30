@@ -1102,6 +1102,15 @@
                                         <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'handlebar_unlock')">Handlebar Unlock</button>
                                     </div>
                                     <div class="button-group">
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'alarm_arm')">Alarm Arm</button>
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'alarm_disarm')">Alarm Disarm</button>
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'alarm_stop')">Alarm Stop</button>
+                                    </div>
+                                    <div class="button-group">
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'alarm_enable')">Alarm Enable</button>
+                                        <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'alarm_disable')">Alarm Disable</button>
+                                    </div>
+                                    <div class="button-group">
                                         <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'reboot')">Reboot</button>
                                         <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'hibernate_manual')">Hibernate Manual</button>
                                         <button class="command-btn" onclick="sendCommand('${scooter.identifier}', 'ping')">Ping</button>
@@ -1234,6 +1243,18 @@
                     const resetCount = data.count || 'unknown';
                     const resetReason = data.reason || 'unknown';
                     return `📡 NRF reset (count: ${resetCount}, reason: ${resetReason})`;
+
+                case 'ota_status_change':
+                    return `📦 OTA: ${data.from} → ${data.to}`;
+
+                case 'alarm_triggered':
+                    return `🚨 Alarm triggered`;
+
+                case 'alarm_cleared':
+                    return `✅ Alarm cleared`;
+
+                case 'alarm_state_change':
+                    return `🛡️ Alarm: ${data.from} → ${data.to}`;
 
                 default:
                     if (data && Object.keys(data).length > 0) {
@@ -1399,6 +1420,18 @@
 
             if (state.vehicle && state.vehicle['seatbox:lock']) {
                 badgeItems.push(`<span>🔒${state.vehicle['seatbox:lock']}</span>`);
+            }
+
+            if (state.alarm && state.alarm['alarm-active'] === 'true') {
+                badgeItems.push(`<span>🚨 alarm</span>`);
+            }
+
+            if (state.ota && state.ota.status && state.ota.status !== 'idle') {
+                let otaLabel = `📦 ${state.ota.status}`;
+                if (state.ota['install-progress']) {
+                    otaLabel += ` ${state.ota['install-progress']}%`;
+                }
+                badgeItems.push(`<span>${otaLabel}</span>`);
             }
 
             badge.innerHTML = badgeItems.join('');
