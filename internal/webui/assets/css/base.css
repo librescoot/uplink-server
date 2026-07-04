@@ -1,0 +1,163 @@
+/* Design tokens, reset, and typography. Flat, square, hairline-bordered.
+   Auto light/dark via prefers-color-scheme. */
+
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --surface-2: #f0f1f4;
+  --border: #d9dce1;
+  --border-strong: #c2c7d0;
+  --text: #1b1f24;
+  --text-muted: #626b78;
+  --accent: #2563eb;
+  --accent-weak: #dbe6ff;
+  --danger: #d1362f;
+  --success: #1a8f4c;
+  --warning: #c07d00;
+  --online: #1a8f4c;
+  --offline: #b0b6bf;
+
+  /* Header is a flat dark bar in both themes so the light logo wordmark
+     stays legible (the old design relied on a gradient for this). */
+  --header-bg: #15191f;
+  --header-fg: #e8ebef;
+
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --gap: 12px;
+  --pad: 14px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216;
+    --surface: #171b21;
+    --surface-2: #1f242c;
+    --border: #2b323c;
+    --border-strong: #3a424e;
+    --text: #e6e9ee;
+    --text-muted: #9099a6;
+    --accent: #4f8cff;
+    --accent-weak: #17263f;
+    --danger: #f0645c;
+    --success: #45c07b;
+    --warning: #e0a83a;
+    --online: #45c07b;
+    --offline: #545c67;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border-radius: 0 !important; /* flat design: no rounded corners anywhere */
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 600;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--text);
+}
+
+button {
+  cursor: pointer;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+  padding: 6px 12px;
+  line-height: 1.2;
+}
+
+button:hover {
+  border-color: var(--accent);
+}
+
+button:active {
+  background: var(--accent-weak);
+}
+
+input,
+select {
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  padding: 7px 9px;
+  min-width: 0;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+code,
+pre {
+  font-family: var(--mono);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.section-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* Status message lines used by dialogs. */
+.status {
+  margin-top: 8px;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+.status.success {
+  color: var(--success);
+  border-color: var(--success);
+}
+.status.error {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.status.info {
+  color: var(--text-muted);
+}

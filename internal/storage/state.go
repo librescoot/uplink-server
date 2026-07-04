@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -133,21 +134,8 @@ func (ss *StateStore) UpdateChanges(scooterID string, changes map[string]any) {
 		ss.states[scooterID] = state
 	}
 
-	// Apply changes to existing state
-	for key, value := range changes {
-		if valueMap, ok := value.(map[string]any); ok {
-			// Nested object - merge with existing
-			if existing, ok := state.State[key].(map[string]any); ok {
-				for subKey, subValue := range valueMap {
-					existing[subKey] = subValue
-				}
-			} else {
-				state.State[key] = valueMap
-			}
-		} else {
-			state.State[key] = value
-		}
-	}
+	// Apply changes to existing state (recursive deep merge)
+	deepMerge(state.State, changes)
 
 	state.LastUpdated = time.Now()
 	state.LastChangeAt = time.Now()
@@ -164,6 +152,69 @@ func (ss *StateStore) UpdateChanges(scooterID string, changes map[string]any) {
 		Type:      "delta",
 		Timestamp: time.Now(),
 	})
+}
+
+// UpdateTelemetryDelta deep-merges changed leaves into a scooter's state and
+// then deletes each removed dotted path ("gps.latitude"), since a merge alone
+// can never remove a key.
+func (ss *StateStore) UpdateTelemetryDelta(scooterID string, changes map[string]any, removed []string) {
+	ss.mu.Lock()
+
+	state, exists := ss.states[scooterID]
+	if !exists {
+		state = &ScooterState{
+			ScooterID: scooterID,
+			State:     make(map[string]any),
+		}
+		ss.states[scooterID] = state
+	}
+
+	deepMerge(state.State, changes)
+	for _, path := range removed {
+		deletePath(state.State, path)
+	}
+
+	state.LastUpdated = time.Now()
+	state.LastChangeAt = time.Now()
+
+	ss.mu.Unlock()
+
+	ss.saveToFile()
+
+	ss.broadcast(StateUpdate{
+		ScooterID: scooterID,
+		State:     changes,
+		Type:      "delta",
+		Timestamp: time.Now(),
+	})
+}
+
+// deepMerge recursively merges src into dst. Nested maps are merged; all other
+// values (including differing types) replace the destination.
+func deepMerge(dst, src map[string]any) {
+	for k, v := range src {
+		if sv, ok := v.(map[string]any); ok {
+			if dv, ok := dst[k].(map[string]any); ok {
+				deepMerge(dv, sv)
+				continue
+			}
+		}
+		dst[k] = v
+	}
+}
+
+// deletePath removes the leaf at a dotted path from a nested map. Missing
+// intermediate keys are a no-op.
+func deletePath(m map[string]any, path string) {
+	segs := strings.Split(path, ".")
+	for i := 0; i < len(segs)-1; i++ {
+		next, ok := m[segs[i]].(map[string]any)
+		if !ok {
+			return
+		}
+		m = next
+	}
+	delete(m, segs[len(segs)-1])
 }
 
 // GetState retrieves the latest state for a scooter

@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
 
+	"github.com/librescoot/uplink-server/internal/session"
 	"github.com/librescoot/uplink-server/internal/storage"
 )
 
@@ -23,6 +25,7 @@ type WebUIHandler struct {
 	eventStore *storage.EventStore
 	connMgr    *storage.ConnectionManager
 	auth       Authenticator
+	sessions   *session.Store
 	apiKey     string
 }
 
@@ -32,14 +35,31 @@ type Authenticator interface {
 }
 
 // NewWebUIHandler creates a new web UI WebSocket handler
-func NewWebUIHandler(stateStore *storage.StateStore, eventStore *storage.EventStore, connMgr *storage.ConnectionManager, auth Authenticator, apiKey string) *WebUIHandler {
+func NewWebUIHandler(stateStore *storage.StateStore, eventStore *storage.EventStore, connMgr *storage.ConnectionManager, auth Authenticator, sessions *session.Store, apiKey string) *WebUIHandler {
 	return &WebUIHandler{
 		stateStore: stateStore,
 		eventStore: eventStore,
 		connMgr:    connMgr,
 		auth:       auth,
+		sessions:   sessions,
 		apiKey:     apiKey,
 	}
+}
+
+// validCredential accepts either the configured API key or a valid session token.
+func (h *WebUIHandler) validCredential(key string) bool {
+	if key == "" {
+		return false
+	}
+	if subtle.ConstantTimeCompare([]byte(key), []byte(h.apiKey)) == 1 {
+		return true
+	}
+	if h.sessions != nil {
+		if _, ok := h.sessions.Validate(key); ok {
+			return true
+		}
+	}
+	return false
 }
 
 // WebMessage represents a message sent to/from web UI clients
@@ -87,7 +107,7 @@ func (h *WebUIHandler) HandleWebConnection(w http.ResponseWriter, r *http.Reques
 		apiKey = r.URL.Query().Get("api_key")
 	}
 
-	if apiKey != h.apiKey {
+	if !h.validCredential(apiKey) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}

@@ -2,7 +2,7 @@ server:
   ws_port: 8080
   lp_port: 8081
   sse_port: 8082
-  enable_web_ui: true
+  enable_web_ui: true      # false = run only the API + scooter WebSocket (no web UI)
   keepalive_interval: "5m"
   lp_timeout: "24h"
   max_connections: 0       # 0 = unlimited
@@ -14,7 +14,12 @@ auth:
   tokens:
     "mdb-12345678": "secret-token-1"
     "mdb-87654321": "secret-token-2"
-    # Add more scooters here
+    # Add more scooters here (or use the web UI "+" button)
+  users:
+    # Web-UI username/password login. A successful login issues a session token
+    # accepted anywhere the api_key is. Passwords are stored as plaintext here,
+    # so protect this file. Omit this section to disable password login.
+    admin: "change-me"
 
 storage:
   type: "memory"  # or "postgres", "timescaledb"

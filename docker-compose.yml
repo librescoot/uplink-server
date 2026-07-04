@@ -1,0 +1,18 @@
+services:
+  uplink-server:
+    build: .
+    image: uplink-server:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # Named volume holds config.yml, the SQLite DB, and state/event files.
+      # A named volume (not a host bind mount) inherits the image's uid so the
+      # non-root server can write to it. On first run a config is generated and
+      # the API key is printed to the container logs.
+      - uplink-data:/app/data
+    environment:
+      CONFIG: /app/data/config.yml
+
+volumes:
+  uplink-data:

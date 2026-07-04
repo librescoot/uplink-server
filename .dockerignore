@@ -1,0 +1,13 @@
+.git
+data
+*.db
+*.db-*
+*.backup
+config.yml
+config.yml.backup
+config-local.yml
+/uplink-server
+/bin
+logs
+run-server.sh
+test-api.sh

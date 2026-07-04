@@ -18,7 +18,11 @@ import (
 	"github.com/librescoot/uplink-server/internal/auth"
 	"github.com/librescoot/uplink-server/internal/handlers"
 	"github.com/librescoot/uplink-server/internal/models"
+	"github.com/librescoot/uplink-server/internal/registry"
+	"github.com/librescoot/uplink-server/internal/session"
 	"github.com/librescoot/uplink-server/internal/storage"
+	"github.com/librescoot/uplink-server/internal/store"
+	"github.com/librescoot/uplink-server/internal/webui"
 )
 
 const version = "1.0.0"
@@ -42,6 +46,16 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 	log.Printf("Starting uplink-server v%s", version)
 
+	// Auto-provision a config with random credentials on first run.
+	if _, statErr := os.Stat(*configPath); os.IsNotExist(statErr) {
+		log.Printf("Config %q not found; generating one with random credentials...", *configPath)
+		creds, genErr := createDefaultConfig(*configPath)
+		if genErr != nil {
+			log.Fatalf("Failed to generate config: %v", genErr)
+		}
+		printCredentials(*configPath, creds)
+	}
+
 	// Load configuration
 	config, err := loadConfig(*configPath)
 	if err != nil {
@@ -50,10 +64,20 @@ func main() {
 
 	// Initialize components
 	authenticator := auth.NewAuthenticator(config)
+	scooterRegistry := registry.New(config, *configPath, authenticator)
+	sessions := session.New(24 * time.Hour)
 	connMgr := storage.NewConnectionManager(config.Server.MaxConnections)
 	responseStore := storage.NewResponseStore(1 * time.Hour)
 	stateStore := storage.NewStateStore("data/state.json")
 	eventStore := storage.NewEventStore(1000, "data/events.jsonl") // Keep last 1000 events per scooter
+
+	// Durable persistence: telemetry history, events, command history/queue.
+	db, err := store.Open("data/uplink.db")
+	if err != nil {
+		log.Fatalf("Failed to open persistence store: %v", err)
+	}
+	defer db.Close()
+	startStoreSweepers(db)
 
 	// Start stats logger
 	connMgr.StartStatsLogger(config.Logging.GetStatsInterval())
@@ -65,29 +89,38 @@ func main() {
 		responseStore,
 		stateStore,
 		eventStore,
+		db,
 		config.Server.GetKeepaliveInterval(),
 		config.Server.MessageRateLimit,
 		config.Server.GetIdleTimeout(),
 	)
 
-	apiHandler := handlers.NewAPIHandler(wsHandler, connMgr, responseStore, stateStore, eventStore, config.Auth.APIKey)
+	apiHandler := handlers.NewAPIHandler(wsHandler, connMgr, responseStore, stateStore, eventStore, db, scooterRegistry, sessions, config.Auth.Users, config.Auth.APIKey)
 
 	// Setup routes
 	if config.Server.EnableWebUI {
-		http.HandleFunc("/", serveWebUI)
-		http.HandleFunc("/images/", serveImages)
+		uiHandler, uiErr := webui.Handler()
+		if uiErr != nil {
+			log.Fatalf("Failed to initialize web UI: %v", uiErr)
+		}
+		http.Handle("/", uiHandler) // serves index.html, /css, /js, /images from embedded assets
 
 		// WebSocket for web UI real-time updates
-		webUIHandler := handlers.NewWebUIHandler(stateStore, eventStore, connMgr, authenticator, config.Auth.APIKey)
+		webUIHandler := handlers.NewWebUIHandler(stateStore, eventStore, connMgr, authenticator, sessions, config.Auth.APIKey)
 		http.HandleFunc("/ws/web", webUIHandler.HandleWebConnection)
 
 		log.Printf("Web UI enabled at /")
+	} else {
+		log.Printf("Web UI disabled (API only)")
 	}
 	http.HandleFunc("/ws", wsHandler.HandleConnection)
 	http.HandleFunc("/api/commands", apiHandler.HandleCommands)
 	http.HandleFunc("/api/commands/", apiHandler.HandleCommandResponse)
 	http.HandleFunc("/api/scooters", apiHandler.HandleScooters)
 	http.HandleFunc("/api/scooters/", apiHandler.HandleScooterDetail)
+	http.HandleFunc("/api/registry", apiHandler.HandleRegistry)
+	http.HandleFunc("/api/login", apiHandler.HandleLogin)
+	http.HandleFunc("/api/logout", apiHandler.HandleLogout)
 
 	// Start server
 	wsAddr := fmt.Sprintf(":%d", config.Server.WSPort)
@@ -130,6 +163,30 @@ func main() {
 	log.Printf("Server stopped")
 }
 
+// telemetryRetention is how long persisted telemetry history is kept.
+const telemetryRetention = 30 * 24 * time.Hour
+
+// startStoreSweepers periodically prunes old telemetry and expires stale queued
+// commands.
+func startStoreSweepers(db *store.Store) {
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for range ticker.C {
+			if n, err := db.PruneTelemetryBefore(time.Now().Add(-telemetryRetention)); err != nil {
+				log.Printf("[Store] Telemetry prune error: %v", err)
+			} else if n > 0 {
+				log.Printf("[Store] Pruned %d old telemetry rows", n)
+			}
+			if n, err := db.ExpireStale(); err != nil {
+				log.Printf("[Store] Command expiry error: %v", err)
+			} else if n > 0 {
+				log.Printf("[Store] Expired %d stale queued commands", n)
+			}
+		}
+	}()
+}
+
 func loadConfig(path string) (*models.Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -153,20 +210,6 @@ func loadConfig(path string) (*models.Config, error) {
 	}
 
 	return &config, nil
-}
-
-func serveWebUI(w http.ResponseWriter, r *http.Request) {
-	// Only serve index.html at root path
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
-
-	http.ServeFile(w, r, "web/index.html")
-}
-
-func serveImages(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, "web"+r.URL.Path)
 }
 
 // addClientCommand handles the add-client subcommand
@@ -263,14 +306,35 @@ func initConfigCommand() {
 		os.Exit(1)
 	}
 
-	// Generate secure API key (32 bytes = 64 hex chars)
-	apiKey, err := generateSecureToken(32)
+	creds, err := createDefaultConfig(*configPath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error generating API key: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error creating config: %v\n", err)
 		os.Exit(1)
 	}
+	printCredentials(*configPath, creds)
+	fmt.Printf("Add clients from the web UI (top-right +) or: ./uplink-server add-client -identifier <id> -config %s\n", *configPath)
+}
 
-	// Create default config
+// generatedCredentials holds the secrets minted for a fresh config.
+type generatedCredentials struct {
+	APIKey   string
+	Username string
+	Password string
+}
+
+// createDefaultConfig writes a new config at path with a random API key and a
+// random password for a default web-UI user, returning the generated secrets.
+func createDefaultConfig(path string) (generatedCredentials, error) {
+	apiKey, err := generateSecureToken(32)
+	if err != nil {
+		return generatedCredentials{}, fmt.Errorf("generate api key: %w", err)
+	}
+	password, err := generateSecureToken(12)
+	if err != nil {
+		return generatedCredentials{}, fmt.Errorf("generate password: %w", err)
+	}
+	const username = "admin"
+
 	config := &models.Config{
 		Server: models.ServerConfig{
 			WSPort:            8080,
@@ -283,6 +347,7 @@ func initConfigCommand() {
 		Auth: models.AuthConfig{
 			APIKey: apiKey,
 			Tokens: make(map[string]models.ScooterConfig),
+			Users:  map[string]string{username: password},
 		},
 		Storage: models.StorageConfig{
 			Type: "memory",
@@ -293,17 +358,22 @@ func initConfigCommand() {
 		},
 	}
 
-	// Write config to file
-	if err := saveConfig(*configPath, config); err != nil {
-		fmt.Fprintf(os.Stderr, "Error saving config: %v\n", err)
-		os.Exit(1)
+	if err := saveConfig(path, config); err != nil {
+		return generatedCredentials{}, err
 	}
+	return generatedCredentials{APIKey: apiKey, Username: username, Password: password}, nil
+}
 
-	fmt.Printf("✓ Created config file: %s\n\n", *configPath)
-	fmt.Printf("API Key (save this securely):\n\n")
-	fmt.Printf("  %s\n\n", apiKey)
-	fmt.Printf("Use this API key to authenticate web UI and REST API requests.\n")
-	fmt.Printf("Add clients with: ./uplink-server add-client -identifier <id> -config %s\n", *configPath)
+// printCredentials prints the generated secrets once, prominently. They are
+// also stored in the config file, but shown here so they are visible in logs.
+func printCredentials(path string, creds generatedCredentials) {
+	fmt.Printf("\n================ uplink-server credentials ================\n")
+	fmt.Printf("  Config:   %s\n", path)
+	fmt.Printf("  API key:  %s\n", creds.APIKey)
+	fmt.Printf("  Username: %s\n", creds.Username)
+	fmt.Printf("  Password: %s\n", creds.Password)
+	fmt.Printf("==========================================================\n")
+	fmt.Printf("Log in via the web UI, or send the API key as X-API-Key.\n\n")
 }
 
 // generateSecureToken generates a cryptographically secure random token

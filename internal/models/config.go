@@ -33,6 +33,9 @@ type ScooterConfig struct {
 type AuthConfig struct {
 	APIKey string                   `yaml:"api_key"`
 	Tokens map[string]ScooterConfig `yaml:"tokens"`
+	// Users maps a web-UI username to its password. A successful login issues a
+	// session token that is accepted anywhere the API key is.
+	Users map[string]string `yaml:"users,omitempty"`
 }
 
 // StorageConfig contains storage settings
