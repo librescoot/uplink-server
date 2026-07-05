@@ -3,6 +3,8 @@
 export const store = {
   scooters: [], // ScooterInfo list (connected + registered)
   states: {},   // scooterId -> merged component state map
+  view: "dashboard", // "dashboard" | "detail"
+  currentScooter: null, // identifier shown in detail view
 };
 
 export function upsertScooter(info) {

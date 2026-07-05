@@ -4,6 +4,7 @@ import { getApiKey, apiRequest } from "./api.js";
 import { store } from "./store.js";
 import { showStatus } from "./format.js";
 import { connectWebSocket } from "./ws.js";
+import { openDetail, back } from "./scooters.js";
 import { sendCommand } from "./commands.js";
 import { openHistory, reloadHistory } from "./history.js";
 import { openScootersDialog, addScooter, deleteScooter, copyToken } from "./registry.js";
@@ -74,6 +75,12 @@ function wire() {
       return;
     }
     switch (btn.dataset.action) {
+      case "open-detail":
+        openDetail(scooter);
+        break;
+      case "back":
+        back();
+        break;
       case "history":
         openHistory(scooter);
         break;

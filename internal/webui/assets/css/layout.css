@@ -69,17 +69,15 @@ header h1 img {
   padding: 20px;
 }
 
-/* Responsive card grid — not one long column. */
+/* Plain block wrapper. The dashboard's .kpis / .tiles and the detail view each
+   manage their own layout, so the container itself must NOT be a grid — otherwise
+   the detail view becomes a trapped grid item and its columns collapse. */
 #scootersContainer {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: var(--gap);
-  align-items: start;
+  display: block;
 }
 
 .empty-state,
 .loading {
-  grid-column: 1 / -1;
   padding: 40px 20px;
   text-align: center;
   color: var(--text-muted);

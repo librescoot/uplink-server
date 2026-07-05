@@ -201,10 +201,13 @@ details[open] > summary::before {
   margin-top: 8px;
 }
 
+/* Two-column table: every value in a component starts at the same x. The key
+   column sizes to the widest key (capped so one long key can't eat the row); the
+   value column takes the rest and wraps long tokens within it. */
 .kv {
   display: grid;
-  grid-template-columns: minmax(90px, max-content) 1fr;
-  gap: 3px 12px;
+  grid-template-columns: fit-content(45%) minmax(0, 1fr);
+  gap: 3px 14px;
   padding: 8px 10px;
   font-family: var(--mono);
   font-size: 12px;
@@ -212,12 +215,15 @@ details[open] > summary::before {
 
 .kv-key {
   color: var(--text-muted);
-  overflow-wrap: anywhere;
+}
+
+.kv-key::after {
+  content: ":";
 }
 
 .kv-val {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .kv-val.value-updated {

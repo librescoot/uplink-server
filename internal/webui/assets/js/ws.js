@@ -2,7 +2,7 @@
 
 import { getApiKey } from "./api.js";
 import { store, upsertScooter } from "./store.js";
-import { renderScooters, setScooterOnline, updateConnectionStats, applyStateUpdate } from "./scooters.js";
+import { onScootersChanged, setScooterOnline, updateConnectionStats, applyStateUpdate } from "./scooters.js";
 import { addEventToDisplay } from "./events.js";
 
 let ws = null;
@@ -25,7 +25,8 @@ export function connectWebSocket() {
     }
   };
   ws.onclose = () => {
-    for (const s of store.scooters) setScooterOnline(s.identifier, false);
+    for (const s of store.scooters) s.connected = false;
+    onScootersChanged();
     setTimeout(connectWebSocket, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 30000);
   };
@@ -43,7 +44,7 @@ function handleMessage(msg) {
   switch (msg.type) {
     case "scooter_list":
       store.scooters = (msg.scooters || []).map((s) => ({ ...s }));
-      renderScooters();
+      onScootersChanged();
       break;
     case "state_update":
       applyStateUpdate(msg.scooter_id, msg.state, msg.update_type);
@@ -61,8 +62,7 @@ function handleMessage(msg) {
       const info = msg.scooter || { identifier: msg.scooter_id, connected: true };
       info.connected = true;
       upsertScooter(info);
-      renderScooters();
-      setScooterOnline(info.identifier, true);
+      onScootersChanged();
       break;
     }
     case "scooter_offline":
